@@ -1,8 +1,9 @@
 # EventOrg — Graduation & Festival Command Center
 
-A board to manage your 5 graduation/festival events: each event has teams for the
-School Play, Content (Visuals & Audio), Kid Training, Clothes, and Props, with
-topic leads, task leads, subtask leads, a "By person" view, and dark mode.
+A board to manage your graduation/festival events. Each event starts with topics for
+School Play, Content (Visuals & Audio), Kid Training, Clothes, and Props — and you can
+add, rename, reorder, or remove topics per event. Each topic has a topic lead, tasks,
+and (for Content) Visuals/Audio subtasks, plus a "By person" view, undo, and dark mode.
 
 ## Files
 

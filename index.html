@@ -35,6 +35,8 @@ button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
 button.primary:hover{opacity:.9;color:#fff}
 button.ghost{background:transparent;border-color:transparent;color:var(--muted);padding:4px 7px}
 button.ghost:hover{color:var(--risk)}
+button:disabled{opacity:.45;cursor:default}
+button:disabled:hover{border-color:var(--line);color:var(--ink)}
 .spacer{flex:1}
 .diskstatus{font-size:12px;color:var(--muted);margin:-6px 0 16px;padding:5px 10px;border-radius:8px;background:var(--field);border:1px solid var(--line);display:inline-block}
 .diskstatus.ok{color:var(--ok);border-color:var(--ok-soft);background:var(--ok-soft)}
@@ -67,6 +69,13 @@ button.ghost:hover{color:var(--risk)}
 .dot{width:10px;height:10px;border-radius:50%;flex:none}
 .stream-title{font-weight:700;font-size:15px}
 .stream-prog{font-size:12px;color:var(--muted);margin-left:auto}
+.topic-tools{display:inline-flex;gap:2px;margin-left:8px}
+.tbtn{font:inherit;font-size:12px;line-height:1;padding:3px 6px;border:1px solid var(--line);background:var(--field);color:var(--muted);border-radius:6px;cursor:pointer}
+.tbtn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.tbtn.tdel:hover:not(:disabled){border-color:var(--risk);color:var(--risk)}
+.tbtn:disabled{opacity:.3;cursor:default}
+.add-topic{display:block;margin:14px 0 0;width:100%;font:inherit;font-size:13px;color:var(--ink);background:var(--field);border:1px dashed var(--line);border-radius:10px;padding:11px}
+.add-topic:hover{border-color:var(--accent);color:var(--accent);border-style:solid}
 .owner-row{padding:8px 13px;background:var(--field);border-bottom:1px solid var(--line);font-size:13px;display:flex;align-items:center;gap:6px}
 .owner-row label{color:var(--muted);font-weight:600}
 .owner-val{flex:1}
@@ -141,21 +150,20 @@ button.ghost:hover{color:var(--risk)}
 <body>
 <div class="wrap">
   <h1>🎓 Graduation &amp; Festival Command Center</h1>
-  <p class="sub">5 events · 5 teams each · nothing slips through. Click any card to open its board. Everything is editable — your changes save automatically on this device.</p>
+  <p class="sub" id="sub">Nothing slips through. Click any card to open its board. Everything is editable — your changes save automatically on this device.</p>
 
   <div class="bar">
     <button class="primary" id="overviewBtn">▦ All events</button>
     <button id="peopleBtn">👥 By person</button>
     <button id="addEventBtn">+ Add event</button>
+    <button id="undoBtn" title="Nothing to undo" disabled>↶ Undo</button>
     <div class="spacer"></div>
     <button id="connectBtn" title="Save directly into your EventOrg project folder">📂 Connect project folder</button>
     <button id="exportBtn" title="Download all data as a backup file">⬇ Save backup</button>
     <button id="importBtn" title="Load data from a backup file">⬆ Restore</button>
-    <button id="recoverBtn" title="Read whatever is still saved in this browser">🛟 Recover</button>
     <input type="file" id="importFile" accept="application/json,.json" style="display:none">
     <button id="themeBtn" title="Toggle dark mode">🌙 Dark</button>
     <button id="printBtn">🖨 Print</button>
-    <button id="resetBtn" class="ghost">Reset</button>
   </div>
   <div id="diskStatus" class="diskstatus">Not connected — click “Connect project folder”</div>
 
@@ -184,16 +192,13 @@ const CONTENT_CATS = [
 
 function defaultTasks(){
   return {
-    play:[{t:"Final script locked"},{t:"Scene order / running sheet"},{t:"Full run-through done"},{t:"Dress rehearsal done"},{t:"Emcee / intro ready"}],
+    play:[{t:"Final script locked"}],
     content:[
-      {t:"Opening / welcome", vis:[{t:"Welcome slide on screen"},{t:"Hall lighting set"}], aud:[{t:"Intro music ready"},{t:"Welcome mic tested"}]},
-      {t:"School play", vis:[{t:"Stage backdrop set"},{t:"Scene lighting cues"},{t:"Slideshow / projector tested"}], aud:[{t:"Scene soundtrack loaded"},{t:"Cast mics tested"},{t:"Cue sheet written"}]},
-      {t:"Awards / certificates", vis:[{t:"Name slides in order"},{t:"Photographer ready"}], aud:[{t:"Name pronunciation list"},{t:"Applause / music cue"}]},
-      {t:"Closing", vis:[{t:"Thank-you slide"},{t:"Group photo setup"}], aud:[{t:"Closing music"},{t:"Backup audio on 2nd device"}]},
+      {t:"Opening / welcome", vis:[], aud:[]},
     ],
-    train:[{t:"Lines / songs memorized"},{t:"Blocking & moves set"},{t:"Group rehearsal done"},{t:"Dress rehearsal done"},{t:"Line-up & entrances clear"}],
-    cloth:[{t:"Costumes assigned per child"},{t:"Sizes fitted & adjusted"},{t:"Each outfit labeled with name"},{t:"Spares for accidents ready"},{t:"Quick-change plan set"}],
-    prop:[{t:"Props list finalized"},{t:"Props built / sourced"},{t:"Props labeled per scene"},{t:"Set & strike plan"},{t:"Backup for fragile props"}],
+    train:[{t:"Lines / songs memorized"}],
+    cloth:[{t:"Costumes assigned per child"}],
+    prop:[{t:"Props list finalized"}],
   };
 }
 
@@ -204,21 +209,40 @@ function mkItem(it){
   if(it.vis||it.aud){o.vis=(it.vis||[]).map(s=>({t:s.t,done:false}));o.aud=(it.aud||[]).map(s=>({t:s.t,done:false}));}
   return o;
 }
-// editable team label (shared across all events); falls back to the WS_META default
+// colors to cycle through when the user adds new custom topics
+const TOPIC_COLORS=["var(--play)","var(--vis)","var(--train)","var(--cloth)","var(--prop)","var(--aud)","var(--accent)"];
+// the ordered topic list for an event (each {key,name,color}); always falls back
+// to the default 5 if an event predates per-event topics.
+function eventTopics(ev){
+  if(!Array.isArray(ev.topics)||!ev.topics.length){
+    ev.topics=WS_META.map(w=>({key:w.key, name:teamName(w.key), color:w.color}));
+  }
+  return ev.topics;
+}
+function topicName(ev,key){
+  const t=eventTopics(ev).find(t=>t.key===key);
+  return t?t.name:((WS_META.find(w=>w.key===key)||{}).name||key);
+}
+// the default template name for a topic key (used as a fallback elsewhere)
 function teamName(key){
   const def=(WS_META.find(w=>w.key===key)||{}).name||key;
   return (data.teamNames&&data.teamNames[key])||def;
 }
+// a fresh set of template streams (1 task per section) for one event
+function freshStreams(){
+  const tasks=defaultTasks();
+  const streams={};
+  WS_META.forEach(w=>{ streams[w.key]={lead:"", items:tasks[w.key].map(mkItem)}; });
+  return streams;
+}
+function freshTopics(){
+  return WS_META.map(w=>({key:w.key, name:w.name, color:w.color}));
+}
 function defaultData(){
   const grades=["Grade 1","Grade 2","Grade 3","Grade 4","Grade 5"];
-  return {teamNames:{}, events: grades.map((g,i)=>{
-    const tasks=defaultTasks();
-    const streams={};
-    WS_META.forEach(w=>{
-      streams[w.key]={lead:"", items:tasks[w.key].map(mkItem)};
-    });
-    return {id:"ev"+i, name:g+" Graduation", grade:g+" · Festival & Play", date:isoAddDays(i), streams};
-  })};
+  return {teamNames:{}, events: grades.map((g,i)=>(
+    {id:"ev"+i, name:g+" Graduation", grade:g+" · Festival & Play", date:isoAddDays(i), streams:freshStreams(), topics:freshTopics()}
+  ))};
 }
 // merge any old separate Visuals/Audio streams into one Content stream
 function migrate(d){
@@ -240,6 +264,14 @@ function migrate(d){
       if(!Array.isArray(it.aud)) it.aud=[];
       delete it.cat;
     });
+    // per-event topic order: back-fill from the default 5 (honoring old renames)
+    if(!Array.isArray(ev.topics)||!ev.topics.length){
+      ev.topics=WS_META.map(w=>({
+        key:w.key,
+        name:(d.teamNames&&d.teamNames[w.key])||w.name,
+        color:w.color
+      }));
+    }
   });
   return d;
 }
@@ -252,7 +284,6 @@ function load(){
   let r=null;
   try{r=localStorage.getItem(LS_KEY);}catch(e){}
   if(r){
-    window.__rawStored=r; // keep a copy of exactly what's in storage, for recovery
     try{return migrate(JSON.parse(r));}
     catch(e){ console.error("Could not parse stored data:",e); /* keep raw, fall through */ }
   }
@@ -271,6 +302,7 @@ const fsSupported = (typeof window!=="undefined") && ("showDirectoryPicker" in w
 let dirHandle=null;        // the project folder
 let diskTimer=null;        // debounce
 let lastHistoryAt=0;       // throttle history snapshots
+let dirtySinceLoad=false;  // did the user edit before autoReconnect finished?
 function setDiskStatus(txt,cls){
   const el=document.getElementById("diskStatus");
   if(el){el.textContent=txt;el.className="diskstatus "+(cls||"");}
@@ -315,25 +347,52 @@ async function writeFile(path,text){
   const w=await fh.createWritable();
   await w.write(text);await w.close();
 }
-async function writeDisk(){
+// deep copy of `data` with transient view-only flags (e.g. _open) stripped,
+// so expand/collapse state never pollutes what we persist or back up.
+function cleanData(){
+  const d=JSON.parse(JSON.stringify(data));
+  (d.events||[]).forEach(ev=>{
+    const content=ev.streams&&ev.streams.content;
+    (content&&content.items||[]).forEach(it=>{delete it._open;});
+  });
+  return d;
+}
+// the single canonical backup/save payload — used by disk save AND Save backup,
+// so the two can never drift apart.
+function backupPayload(){
+  return JSON.stringify({app:"grad-festival-command-center",version:1,savedAt:new Date().toISOString(),data:cleanData()},null,2);
+}
+let writing=false, writeQueued=false;
+// writeDisk is serialized: only one createWritable() session at a time. If a
+// save is requested while a write is in flight, we re-run once after it finishes
+// so the latest `data` always lands last (no torn / stale-overwrite races).
+// forceHistory=true writes a restore point regardless of the 2-min throttle —
+// used before destructive actions (Restore / Recover / Reset).
+async function writeDisk(forceHistory){
   if(!dirHandle) return;
+  if(writing){ writeQueued=true; return; }
+  writing=true;
   try{
-    const payload=JSON.stringify({app:"grad-festival-command-center",version:1,savedAt:new Date().toISOString(),data},null,2);
+    const payload=backupPayload();
     await writeFile("data/board.json",payload);
     const now=Date.now();
-    if(now-lastHistoryAt>120000){ // a restore point at most every 2 min
+    if(forceHistory || now-lastHistoryAt>120000){ // a restore point at most every 2 min
       lastHistoryAt=now;
       const stamp=new Date().toISOString().slice(0,19).replace(/[:T]/g,"-");
       await writeFile("history/board-"+stamp+".json",payload);
     }
     setDiskStatus("✔ Saved to folder · "+new Date().toLocaleTimeString(),"ok");
   }catch(e){ setDiskStatus("⚠ Couldn't write to folder","warn"); }
+  finally{
+    writing=false;
+    if(writeQueued){ writeQueued=false; writeDisk(); }
+  }
 }
 function scheduleDiskSave(){
   if(!dirHandle) return;
   setDiskStatus("Saving…","");
   clearTimeout(diskTimer);
-  diskTimer=setTimeout(writeDisk,700);
+  diskTimer=setTimeout(()=>writeDisk(),700);
 }
 async function connectFolder(){
   if(!fsSupported){
@@ -363,7 +422,14 @@ async function autoReconnect(){
       if(await h.queryPermission({mode:"readwrite"})==="granted"){
         dirHandle=h;
         const disk=await readDisk();
-        if(disk){data=migrate(disk);renderActive();}
+        if(disk){
+          // Don't blow away edits the user made while we were reconnecting.
+          if(!dirtySinceLoad || confirm("This folder has a saved board. Load it and discard the changes you just made on screen?")){
+            data=migrate(disk);view={mode:"overview",eventId:null};renderActive();
+          } else {
+            writeDisk(); // keep on-screen edits; write them to the folder
+          }
+        }
         setDiskStatus("✔ Connected to project folder","ok");
         return;
       }
@@ -379,8 +445,10 @@ function renderActive(){
   else renderOverview();
 }
 function save(){
-  const json=JSON.stringify(data);
-  try{localStorage.setItem(LS_KEY,json);}catch(e){}
+  dirtySinceLoad=true;
+  const json=JSON.stringify(cleanData());
+  let lsOk=true;
+  try{localStorage.setItem(LS_KEY,json);}catch(e){lsOk=false;}
   // rolling in-storage snapshots (safety net: keeps the last 12 versions)
   try{
     const hist=JSON.parse(localStorage.getItem(HIST_KEY)||"[]");
@@ -390,11 +458,61 @@ function save(){
       while(hist.length>12) hist.shift();
       localStorage.setItem(HIST_KEY,JSON.stringify(hist));
     }
-  }catch(e){}
+  }catch(e){ /* history is best-effort; primary save status is handled above */ }
+  // If browser storage is full and we have no folder connected, the user has
+  // NO durable copy — warn loudly instead of failing silently.
+  if(!lsOk && !dirHandle){
+    setDiskStatus("⚠ Browser storage is full — click “Save backup” to keep your work","warn");
+  }
   scheduleDiskSave(); // write to the connected project folder, if any
 }
+/* ---------- UNDO (last 3 destructive actions) ---------- */
+const UNDO_MAX=3;
+let undoStack=[]; // [{label, json}] — snapshot of the board BEFORE each action
+// Call this at the START of a destructive/irreversible action, before mutating `data`.
+function pushUndo(label){
+  undoStack.push({label, json:JSON.stringify(cleanData())});
+  while(undoStack.length>UNDO_MAX) undoStack.shift();
+  updateUndoBtn();
+}
+function doUndo(){
+  const snap=undoStack.pop();
+  if(!snap) return;
+  try{ data=migrate(JSON.parse(snap.json)); }catch(e){ updateUndoBtn(); return; }
+  view={mode:"overview",eventId:null};
+  save();           // persist the restored state (and to disk if connected)
+  renderOverview();
+  updateUndoBtn();
+}
+function updateUndoBtn(){
+  const b=document.getElementById("undoBtn");
+  if(!b) return;
+  const next=undoStack[undoStack.length-1];
+  b.disabled=!next;
+  b.title=next?("Undo: "+next.label+"  ("+undoStack.length+" step"+(undoStack.length>1?"s":"")+" available)")
+              :"Nothing to undo";
+}
 
+// Another tab on this device saved a newer version — warn rather than silently
+// clobber it on our next write.
+let crossTabWarned=false;
+window.addEventListener("storage",e=>{
+  if(e.key===LS_KEY && e.newValue && e.newValue!==JSON.stringify(cleanData()) && !crossTabWarned){
+    crossTabWarned=true;
+    setDiskStatus("⚠ This board was changed in another tab — reload before editing to avoid overwriting it","warn");
+  }
+});
+
+// chronological sort that sinks blank/missing dates to the end instead of the top
+function byDate(a,b){
+  const da=(a.date||"").trim(), db=(b.date||"").trim();
+  if(!da&&!db) return 0;
+  if(!da) return 1;
+  if(!db) return -1;
+  return da.localeCompare(db);
+}
 function fmtDate(iso){
+  if(!iso||!iso.trim()) return "no date";
   const d=new Date(iso+"T00:00:00");
   if(isNaN(d)) return iso;
   return d.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
@@ -402,11 +520,12 @@ function fmtDate(iso){
 function daysUntil(iso){
   const today=new Date();today.setHours(0,0,0,0);
   const d=new Date(iso+"T00:00:00");
+  if(isNaN(d)) return null; // no/invalid date → unknown, not NaN
   return Math.round((d-today)/86400000);
 }
 function eventStats(ev){
   let done=0,total=0;
-  WS_META.forEach(w=>{(ev.streams[w.key]?.items||[]).forEach(i=>{total++;if(i.done)done++;});});
+  eventTopics(ev).forEach(t=>{(ev.streams[t.key]?.items||[]).forEach(i=>{total++;if(i.done)done++;});});
   return {done,total,pct: total? Math.round(done/total*100):0};
 }
 function streamStats(s){
@@ -420,17 +539,21 @@ function progClass(pct){return pct>=100?"badge-ok":pct>=50?"badge-warn":"badge-r
 function renderOverview(){
   document.getElementById("detail").classList.add("hidden");
   document.getElementById("people").classList.add("hidden");
+  const n=data.events.length;
+  const sub=document.getElementById("sub");
+  if(sub) sub.textContent=n+(n===1?" event":" events")+" · nothing slips through. Click any card to open its board. Everything is editable — your changes save automatically on this device.";
   const ov=document.getElementById("overview");
   ov.classList.remove("hidden");
   let html='<div class="overview">';
   data.events
     .slice()
-    .sort((a,b)=>a.date.localeCompare(b.date))
+    .sort(byDate)
     .forEach(ev=>{
       const s=eventStats(ev);
       const du=daysUntil(ev.date);
       let dtxt, dcls;
-      if(du<0){dtxt="done";dcls="badge-ok";}
+      if(du===null){dtxt="set a date";dcls="badge-warn";}
+      else if(du<0){dtxt="done";dcls="badge-ok";}
       else if(du===0){dtxt="TODAY";dcls="badge-risk";}
       else if(du===1){dtxt="tomorrow";dcls="badge-risk";}
       else {dtxt="in "+du+"d";dcls=du<=2?"badge-warn":"badge-ok";}
@@ -449,13 +572,15 @@ function renderOverview(){
   ov.querySelectorAll(".ev-card").forEach(c=>c.onclick=()=>openEvent(c.dataset.id));
 }
 function riskNote(ev){
-  // surface the least-complete workstream
+  // surface the least-complete topic (ignoring empty ones — they have no work yet)
   let worst=null;
-  WS_META.forEach(w=>{
-    const st=streamStats(ev.streams[w.key]);
-    if(!worst||st.pct<worst.pct) worst={name:teamName(w.key),pct:st.pct};
+  eventTopics(ev).forEach(t=>{
+    const s=ev.streams[t.key]; if(!s||!s.items.length) return;
+    const st=streamStats(s);
+    if(!worst||st.pct<worst.pct) worst={name:t.name,pct:st.pct};
   });
-  if(!worst||worst.pct>=100) return "✅ all teams ready";
+  if(!worst) return "— no tasks yet";
+  if(worst.pct>=100) return "✅ all teams ready";
   return "⚠ "+worst.name.replace(/^[^ ]+ /,"")+" "+worst.pct+"%";
 }
 
@@ -476,6 +601,7 @@ function renderDetail(){
     <div class="eyebrow">
       📅 <span class="editfield" data-edit="date">${esc(ev.date)}</span> (${fmtDate(ev.date)}) ·
       <span class="editfield" data-edit="grade">${esc(ev.grade)}</span>
+      &nbsp;·&nbsp;<button class="ghost" id="resetEvent" title="Restore this event's tasks to the starting template">reset this event</button>
       &nbsp;·&nbsp;<button class="ghost" id="delEvent">delete event</button>
     </div>
     <div class="legend">
@@ -484,14 +610,24 @@ function renderDetail(){
       <span>Tick tasks as your teams finish.</span>
     </div>
     <div class="streams">`;
-  WS_META.forEach(w=>{
+  const topics=eventTopics(ev);
+  topics.forEach((w,ti)=>{
     const stream=ev.streams[w.key];
     const st=streamStats(stream);
+    const empty=!stream.items.length;
+    const first=ti===0, last=ti===topics.length-1;
     html+=`<div class="stream${w.key==='content'?' wide':''}">
       <div class="stream-head">
-        <span class="dot" style="background:${w.color}"></span>
-        <span class="stream-title editfield" data-teamname="${w.key}" title="rename this team">${esc(teamName(w.key))}</span>
+        <span class="dot" style="background:${w.color||'var(--accent)'}"></span>
+        <span class="stream-title editfield" data-teamname="${w.key}" title="rename this topic">${esc(w.name)}</span>
         <span class="stream-prog">${st.done}/${st.total}</span>
+        <span class="topic-tools">
+          <button class="tbtn" data-tmove="${w.key}|top"    title="Move to top"    ${first?'disabled':''}>⤒</button>
+          <button class="tbtn" data-tmove="${w.key}|up"     title="Move up"        ${first?'disabled':''}>↑</button>
+          <button class="tbtn" data-tmove="${w.key}|down"   title="Move down"      ${last?'disabled':''}>↓</button>
+          <button class="tbtn" data-tmove="${w.key}|bottom" title="Move to bottom" ${last?'disabled':''}>⤓</button>
+          <button class="tbtn tdel" data-tdel="${w.key}" title="${empty?'Delete this empty topic':'Empty this topic before deleting'}" ${empty?'':'disabled'}>✕</button>
+        </span>
       </div>
       <div class="owner-row">
         <label>Topic lead:</label>
@@ -547,6 +683,7 @@ function renderDetail(){
     }
   });
   html+='</div>';
+  html+=`<button class="add-topic" id="addTopic">＋ Add topic</button>`;
   d.innerHTML=html;
   wireDetail(ev);
 }
@@ -568,7 +705,31 @@ function wireDetail(ev){
   });
   d.querySelectorAll('[data-edit]').forEach(el=>el.onclick=()=>inlineEdit(el,()=>ev[el.dataset.edit],v=>{ev[el.dataset.edit]=v;}));
   d.querySelectorAll('[data-lead]').forEach(el=>el.onclick=()=>inlineEdit(el,()=>ev.streams[el.dataset.lead].lead,v=>{ev.streams[el.dataset.lead].lead=v;}));
-  d.querySelectorAll('[data-teamname]').forEach(el=>el.onclick=()=>inlineEdit(el,()=>teamName(el.dataset.teamname),v=>{data.teamNames[el.dataset.teamname]=v;}));
+  d.querySelectorAll('[data-teamname]').forEach(el=>el.onclick=()=>{
+    const t=eventTopics(ev).find(t=>t.key===el.dataset.teamname);
+    inlineEdit(el,()=>t?t.name:"",v=>{ if(t) t.name=v; });
+  });
+  // reorder a topic: top / up / down / bottom
+  d.querySelectorAll('[data-tmove]').forEach(b=>b.onclick=()=>{
+    const [key,dir]=b.dataset.tmove.split("|");
+    const arr=eventTopics(ev); const i=arr.findIndex(t=>t.key===key);
+    if(i<0) return;
+    let j=i;
+    if(dir==="up") j=i-1; else if(dir==="down") j=i+1;
+    else if(dir==="top") j=0; else if(dir==="bottom") j=arr.length-1;
+    if(j<0||j>=arr.length||j===i) return;
+    const [moved]=arr.splice(i,1); arr.splice(j,0,moved);
+    save();renderDetail();
+  });
+  // delete an empty topic
+  d.querySelectorAll('[data-tdel]').forEach(b=>b.onclick=()=>{
+    const key=b.dataset.tdel; const stream=ev.streams[key];
+    if(stream && stream.items.length) return; // guard: only empty topics
+    pushUndo('delete topic “'+topicName(ev,key)+'”');
+    ev.topics=eventTopics(ev).filter(t=>t.key!==key);
+    delete ev.streams[key];
+    save();renderDetail();
+  });
   d.querySelectorAll('[data-tedit]').forEach(el=>el.onclick=()=>{
     const [k,i]=el.dataset.tedit.split("|");
     inlineEdit(el,()=>ev.streams[k].items[+i].t,v=>{ev.streams[k].items[+i].t=v;});
@@ -586,10 +747,13 @@ function wireDetail(ev){
     inlineEdit(el,()=>ev.streams[k].items[+i].who||"",v=>{ev.streams[k].items[+i].who=v;});
   });
   d.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
-    const [k,i]=b.dataset.del.split("|");ev.streams[k].items.splice(+i,1);save();renderDetail();
+    const [k,i]=b.dataset.del.split("|");
+    pushUndo('delete task “'+(ev.streams[k].items[+i]||{}).t+'”');
+    ev.streams[k].items.splice(+i,1);save();renderDetail();
   });
   d.querySelectorAll('[data-subdel]').forEach(b=>b.onclick=()=>{
     const [i,cat,si]=b.dataset.subdel.split("|");
+    pushUndo('delete subtask “'+(ev.streams.content.items[+i][cat][+si]||{}).t+'”');
     ev.streams.content.items[+i][cat].splice(+si,1);save();renderDetail();
   });
   // add a top-level task
@@ -613,8 +777,25 @@ function wireDetail(ev){
     if(tgt){tgt.focus();tgt.scrollIntoView({block:"center"});}
     focusSel=null;
   }
+  document.getElementById("addTopic").onclick=()=>{
+    const key="t"+Date.now();
+    const color=TOPIC_COLORS[eventTopics(ev).length%TOPIC_COLORS.length];
+    eventTopics(ev).push({key, name:"New Topic", color});
+    ev.streams[key]={lead:"", items:[]};
+    save();renderDetail();
+    // focus the new topic's name for immediate editing
+    focusSel=null;
+    const el=document.querySelector('[data-teamname="'+key+'"]');
+    if(el){el.scrollIntoView({block:"center"}); el.click();}
+  };
+  document.getElementById("resetEvent").onclick=()=>{
+    if(confirm("Reset “"+ev.name+"” back to the starting template? Its tasks, topics and team leads will be reset to the default 5 (the event name and date stay).")){
+      pushUndo('reset event “'+ev.name+'”');
+      ev.streams=freshStreams();ev.topics=freshTopics();save();renderDetail();
+    }
+  };
   document.getElementById("delEvent").onclick=()=>{
-    if(confirm("Delete this whole event?")){data.events=data.events.filter(e=>e.id!==ev.id);save();renderOverview();document.getElementById("overviewBtn").click();}
+    if(confirm("Delete this whole event?")){pushUndo('delete event “'+ev.name+'”');data.events=data.events.filter(e=>e.id!==ev.id);save();renderOverview();document.getElementById("overviewBtn").click();}
   };
 }
 
@@ -642,10 +823,10 @@ function collectAssignments(){
       (map[key]||(map[key]={name:name.trim(),items:[]})).items.push(entry);
     } else if(entry.assignable){ unassigned.push(entry); }
   }
-  data.events.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(ev=>{
-    WS_META.forEach(w=>{
-      const stream=ev.streams[w.key];
-      const tn=teamName(w.key);
+  data.events.slice().sort(byDate).forEach(ev=>{
+    eventTopics(ev).forEach(w=>{
+      const stream=ev.streams[w.key]; if(!stream) return;
+      const tn=w.name;
       add(stream.lead,{evName:ev.name,date:ev.date,team:tn,kind:'topic',text:tn.replace(/^[^ ]+ /,'')+' — topic lead',done:null,assignable:false});
       stream.items.forEach((it,idx)=>{
         add(it.who,{evName:ev.name,date:ev.date,team:tn,kind:'task',text:it.t,done:!!it.done,assignable:true,sel:{evId:ev.id,ws:w.key,idx}});
@@ -663,6 +844,7 @@ function collectAssignments(){
 }
 function dayTag(iso){
   const du=daysUntil(iso);
+  if(du===null) return '<span class="daytag badge-warn">no date</span>';
   if(du<0) return '<span class="daytag badge-ok">done day</span>';
   if(du===0) return '<span class="daytag badge-risk">TODAY</span>';
   if(du===1) return '<span class="daytag badge-risk">tomorrow</span>';
@@ -686,8 +868,9 @@ function renderPeople(){
   p.classList.remove("hidden");
   const {map,unassigned}=collectAssignments();
   const people=Object.values(map).sort((a,b)=>a.name.localeCompare(b.name));
+  const nEv=data.events.length;
   let html=`<div class="detail-head"><h2>👥 Tasks by person</h2></div>
-    <div class="eyebrow">Everyone's assignments across all 5 events — topic leads (★), task leads and subtask leads. Tick items off right here.</div>`;
+    <div class="eyebrow">Everyone's assignments across all ${nEv} event${nEv===1?'':'s'} — topic leads (★), task leads and subtask leads. Tick items off right here.</div>`;
   if(!people.length){
     html+=`<div class="empty">No names assigned yet. Open an event and use the “＋ assign” chips on tasks and subtasks, or set a Topic lead.</div>`;
   }
@@ -731,10 +914,8 @@ function renderPeople(){
 document.getElementById("overviewBtn").onclick=()=>{view={mode:"overview",eventId:null};renderOverview();};
 document.getElementById("peopleBtn").onclick=()=>{view={mode:"people",eventId:null};renderPeople();};
 document.getElementById("addEventBtn").onclick=()=>{
-  const tasks=defaultTasks();const streams={};
-  WS_META.forEach(w=>streams[w.key]={lead:"",items:tasks[w.key].map(mkItem)});
   const id="ev"+Date.now();
-  data.events.push({id,name:"New Event",grade:"Grade · Festival & Play",date:isoAddDays(data.events.length),streams});
+  data.events.push({id,name:"New Event",grade:"Grade · Festival & Play",date:isoAddDays(data.events.length),streams:freshStreams()});
   save();openEvent(id);
 };
 const themeBtn=document.getElementById("themeBtn");
@@ -747,34 +928,7 @@ themeBtn.onclick=()=>applyTheme(!document.body.classList.contains("dark"));
 applyTheme((function(){try{return localStorage.getItem("gradFestivalTheme")==="dark";}catch(e){return false;}})());
 // --- save / restore backups ---
 document.getElementById("exportBtn").onclick=()=>{
-  const payload=JSON.stringify({app:"grad-festival-command-center",version:1,savedAt:new Date().toISOString(),data},null,2);
-  const blob=new Blob([payload],{type:"application/json"});
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);
-  a.download="grad-festival-backup-"+new Date().toISOString().slice(0,10)+".json";
-  document.body.appendChild(a);a.click();a.remove();
-  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-};
-// --- emergency recovery: read whatever is still in this browser's storage, non-destructively ---
-document.getElementById("recoverBtn").onclick=()=>{
-  let raw=null;
-  try{raw=localStorage.getItem(LS_KEY);}catch(e){}
-  if(!raw) raw=window.__rawStored||null;
-  if(!raw){
-    alert("Nothing is saved in this browser's storage for this board, so there's no earlier data to recover here.\n\nIf you ever clicked “Save backup”, use “Restore” to load that file instead.");
-    return;
-  }
-  // 1) always download a safety copy first, before touching anything
-  downloadText(raw,"grad-festival-RECOVERED-"+new Date().toISOString().slice(0,19).replace(/[:T]/g,"-")+".json");
-  // 2) try to load it back into the board
-  try{
-    const d=JSON.parse(raw);
-    if(!d||!Array.isArray(d.events)) throw new Error("not a board");
-    data=migrate(d);save();view={mode:"overview",eventId:null};renderOverview();
-    alert("Recovered your saved data and reloaded the board ✔\nA safety copy was also downloaded to your computer.");
-  }catch(e){
-    alert("I found saved data and downloaded it as a file, but it couldn't be auto-loaded — the format may be from an older version.\n\nPlease send me that downloaded file and I'll repair it.");
-  }
+  downloadText(backupPayload(),"grad-festival-backup-"+new Date().toISOString().slice(0,10)+".json");
 };
 document.getElementById("connectBtn").onclick=connectFolder;
 const importFile=document.getElementById("importFile");
@@ -788,6 +942,8 @@ importFile.onchange=()=>{
       const d=parsed&&parsed.data?parsed.data:parsed; // accept wrapped or raw
       if(!d||!Array.isArray(d.events)) throw new Error("no events");
       if(!confirm("Restoring will replace everything currently on this board. Continue?")) return;
+      pushUndo('restore backup');
+      writeDisk(true); // snapshot the about-to-be-replaced state into history/
       data=migrate(d);save();view={mode:"overview",eventId:null};renderOverview();
       alert("Backup restored ✔");
     }catch(e){ alert("Sorry — that file doesn't look like a valid backup."); }
@@ -795,13 +951,10 @@ importFile.onchange=()=>{
   r.readAsText(f);
 };
 document.getElementById("printBtn").onclick=()=>window.print();
-document.getElementById("resetBtn").onclick=()=>{
-  if(confirm("Reset everything back to the starting template? Your edits will be lost.")){
-    data=defaultData();save();view={mode:"overview",eventId:null};renderOverview();
-  }
-};
+document.getElementById("undoBtn").onclick=doUndo;
 
 renderOverview();
+updateUndoBtn();
 autoReconnect();
 </script>
 </body>

@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Graduation & Festival Command Center</title>
+<style>
+:root{
+  color-scheme: light;
+  --bg:#f4f6fb; --card:#ffffff; --ink:#1f2430; --muted:#6b7280;
+  --line:#e5e8ef; --accent:#4f46e5; --accent-soft:#eef0ff;
+  --ok:#16a34a; --ok-soft:#e7f6ec; --warn:#d97706; --warn-soft:#fdf3e3;
+  --risk:#dc2626; --risk-soft:#fdeaea;
+  --vis:#7c3aed; --aud:#0891b2; --train:#db2777; --cloth:#ea580c; --prop:#15803d; --play:#4f46e5;
+  --hover:#f7f8fc; --field:#fafbff; --field-focus:#ffffff;
+}
+body.dark{
+  color-scheme: dark;
+  --bg:#0e1320; --card:#1a2030; --ink:#e8ebf2; --muted:#94a0b8;
+  --line:#2a3245; --accent:#8b87f7; --accent-soft:#272c46;
+  --ok:#4ade80; --ok-soft:#16321f; --warn:#fbbf24; --warn-soft:#3a2d12;
+  --risk:#f87171; --risk-soft:#3a1c1c;
+  --vis:#a78bfa; --aud:#22d3ee; --train:#f472b6; --cloth:#fb923c; --prop:#4ade80; --play:#8b87f7;
+  --hover:#212838; --field:#161c2a; --field-focus:#1f2636;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding:18px 18px 60px}
+h1{font-size:21px;margin:0 0 2px}
+.sub{color:var(--muted);font-size:13px;margin:0 0 16px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:7px 12px;transition:.15s}
+button:hover{border-color:var(--accent);color:var(--accent)}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+button.primary:hover{opacity:.9;color:#fff}
+button.ghost{background:transparent;border-color:transparent;color:var(--muted);padding:4px 7px}
+button.ghost:hover{color:var(--risk)}
+.spacer{flex:1}
+.diskstatus{font-size:12px;color:var(--muted);margin:-6px 0 16px;padding:5px 10px;border-radius:8px;background:var(--field);border:1px solid var(--line);display:inline-block}
+.diskstatus.ok{color:var(--ok);border-color:var(--ok-soft);background:var(--ok-soft)}
+.diskstatus.warn{color:var(--warn);border-color:var(--warn-soft);background:var(--warn-soft)}
+
+/* overview */
+.overview{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;margin-bottom:8px}
+.ev-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;cursor:pointer;transition:.15s;position:relative}
+.ev-card:hover{box-shadow:0 4px 16px rgba(31,36,48,.08);transform:translateY(-1px)}
+.ev-card.active{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.ev-date{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.ev-name{font-size:16px;font-weight:700;margin:3px 0 2px}
+.ev-grade{font-size:12px;color:var(--muted);margin-bottom:10px}
+.countpill{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;margin-bottom:8px}
+.prog{height:8px;border-radius:6px;background:var(--line);overflow:hidden}
+.prog>span{display:block;height:100%;background:var(--ok);transition:width .3s}
+.ev-meta{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:12px;color:var(--muted)}
+.daystag{position:absolute;top:12px;right:12px;font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px}
+
+/* detail */
+.detail{margin-top:18px}
+.detail-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;margin-bottom:4px}
+.detail-head h2{margin:0;font-size:20px}
+.editfield{border:1px dashed transparent;border-radius:6px;padding:1px 4px;cursor:text}
+.editfield:hover{border-color:var(--line);background:var(--field)}
+.eyebrow{color:var(--muted);font-size:13px;margin-bottom:14px}
+.streams{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
+.stream{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+.stream-head{padding:11px 13px;display:flex;align-items:center;gap:9px;border-bottom:1px solid var(--line)}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}
+.stream-title{font-weight:700;font-size:15px}
+.stream-prog{font-size:12px;color:var(--muted);margin-left:auto}
+.owner-row{padding:8px 13px;background:var(--field);border-bottom:1px solid var(--line);font-size:13px;display:flex;align-items:center;gap:6px}
+.owner-row label{color:var(--muted);font-weight:600}
+.owner-val{flex:1}
+.tasks{list-style:none;margin:0;padding:6px 6px 4px}
+.task{display:flex;align-items:flex-start;gap:9px;padding:7px 8px;border-radius:8px}
+.task:hover{background:var(--hover)}
+.task input[type=checkbox]{margin-top:2px;width:17px;height:17px;accent-color:var(--accent);flex:none;cursor:pointer}
+.task .txt{flex:1;cursor:text;border:1px dashed transparent;border-radius:5px;padding:1px 3px}
+.task .txt:hover{border-color:var(--line)}
+.task.done .txt{text-decoration:line-through;color:var(--muted)}
+.stream.wide{grid-column:1 / -1}
+/* content items with expandable subtasks */
+.ctask{border-radius:8px;margin:2px 6px}
+.ctask.done>.ctask-row .txt{text-decoration:line-through;color:var(--muted)}
+.ctask-row{display:flex;align-items:center;gap:9px;padding:8px}
+.ctask-row:hover{background:var(--hover);border-radius:8px}
+.ctask-row input[type=checkbox]{width:17px;height:17px;accent-color:var(--accent);flex:none;cursor:pointer}
+.ctask-row .txt{flex:1;cursor:text;border:1px dashed transparent;border-radius:5px;padding:1px 3px;font-weight:600}
+.ctask-row .txt:hover{border-color:var(--line)}
+.exp{font-size:12px;padding:3px 9px;border-radius:20px;background:var(--accent-soft);color:var(--accent);border:none;flex:none}
+.exp:hover{background:var(--accent);color:#fff}
+.exp.on{background:var(--accent);color:#fff}
+.subwrap{margin:0 8px 8px 30px;border-left:2px solid var(--line);padding-left:6px}
+.subhead{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:var(--ink);padding:8px 6px 2px}
+.subcount{font-weight:600;color:var(--muted);font-size:12px}
+.subtasks{list-style:none;margin:0;padding:0}
+.subtask{display:flex;align-items:flex-start;gap:8px;padding:5px 6px;border-radius:6px}
+.subtask:hover{background:var(--hover)}
+.subtask input[type=checkbox]{margin-top:2px;width:15px;height:15px;accent-color:var(--accent);flex:none;cursor:pointer}
+.subtask .txt{flex:1;cursor:text;border:1px dashed transparent;border-radius:5px;padding:1px 3px;font-size:13px}
+.subtask .txt:hover{border-color:var(--line)}
+.subtask.done .txt{text-decoration:line-through;color:var(--muted)}
+.who{flex:none;font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-soft);border-radius:20px;padding:2px 9px;cursor:text;white-space:nowrap}
+.who:hover{box-shadow:0 0 0 1px var(--accent) inset}
+.who .assign{color:var(--muted);font-weight:500}
+.add-task.sub{width:calc(100% - 12px);margin:3px 6px 8px;padding:6px 9px;font-size:12.5px}
+.add-task{display:block;width:calc(100% - 16px);margin:2px 8px 10px;font:inherit;font-size:13px;color:var(--ink);background:var(--field);border:1px dashed var(--line);border-radius:8px;padding:8px 10px}
+.add-task::placeholder{color:var(--muted)}
+.add-task:focus{outline:none;border-color:var(--accent);border-style:solid;background:var(--field-focus)}
+.foot{margin-top:26px;color:var(--muted);font-size:12px;text-align:center}
+.badge-ok{background:var(--ok-soft);color:var(--ok)}
+.badge-warn{background:var(--warn-soft);color:var(--warn)}
+.badge-risk{background:var(--risk-soft);color:var(--risk)}
+.hidden{display:none}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted);margin:2px 0 18px}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+/* by-person view */
+.people-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
+.person-card{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.person-card.unassigned{grid-column:1 / -1;border-color:var(--risk-soft)}
+.person-card.unassigned summary{cursor:pointer;list-style:none}
+.person-card.unassigned summary::-webkit-details-marker{display:none}
+.person-head{display:flex;align-items:center;gap:9px;padding:11px 13px;border-bottom:1px solid var(--line)}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:none}
+.avatar.warn{background:var(--risk)}
+.pname{font-weight:700;font-size:15px}
+.pcount{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px}
+.person-head .pcount:first-of-type{margin-left:auto}
+.plist{list-style:none;margin:0;padding:6px}
+.prow{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:8px;font-size:13px}
+.prow:hover{background:var(--hover)}
+.prow input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);flex:none;cursor:pointer}
+.rolepin{color:var(--warn);font-size:13px;width:16px;text-align:center;flex:none}
+.prow .ptext{flex:1}
+.prow.done .ptext{text-decoration:line-through;color:var(--muted)}
+.ctx{font-size:11px;color:var(--muted);white-space:nowrap}
+.daytag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;white-space:nowrap}
+.empty{background:var(--card);border:1px dashed var(--line);border-radius:12px;padding:18px;color:var(--muted)}
+@media print{.bar,.add-task,.ghost,.exp{display:none}.stream,.person-card{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🎓 Graduation &amp; Festival Command Center</h1>
+  <p class="sub">5 events · 5 teams each · nothing slips through. Click any card to open its board. Everything is editable — your changes save automatically on this device.</p>
+
+  <div class="bar">
+    <button class="primary" id="overviewBtn">▦ All events</button>
+    <button id="peopleBtn">👥 By person</button>
+    <button id="addEventBtn">+ Add event</button>
+    <div class="spacer"></div>
+    <button id="connectBtn" title="Save directly into your EventOrg project folder">📂 Connect project folder</button>
+    <button id="exportBtn" title="Download all data as a backup file">⬇ Save backup</button>
+    <button id="importBtn" title="Load data from a backup file">⬆ Restore</button>
+    <button id="recoverBtn" title="Read whatever is still saved in this browser">🛟 Recover</button>
+    <input type="file" id="importFile" accept="application/json,.json" style="display:none">
+    <button id="themeBtn" title="Toggle dark mode">🌙 Dark</button>
+    <button id="printBtn">🖨 Print</button>
+    <button id="resetBtn" class="ghost">Reset</button>
+  </div>
+  <div id="diskStatus" class="diskstatus">Not connected — click “Connect project folder”</div>
+
+  <div id="overview"></div>
+  <div id="detail" class="detail hidden"></div>
+  <div id="people" class="detail hidden"></div>
+
+  <div class="foot">Tip: rename events, dates, team leads and tasks just by clicking the text. Add tasks with “＋ add task”.</div>
+</div>
+
+<script>
+const LS_KEY = "gradFestivalBoard.v1";
+const HIST_KEY = "gradFestivalBoard.hist";
+const WS_META = [
+  {key:"play",    name:"🎭 School Play",            color:"var(--play)"},
+  {key:"content", name:"🖥 Content (Visuals & Audio)", color:"var(--vis)"},
+  {key:"train",   name:"🧒 Kid Training",            color:"var(--train)"},
+  {key:"cloth",   name:"👕 Clothes",                 color:"var(--cloth)"},
+  {key:"prop",    name:"🪄 Props",                   color:"var(--prop)"},
+];
+// the two categories inside the Content team
+const CONTENT_CATS = [
+  {key:"vis", name:"🎨 Visuals"},
+  {key:"aud", name:"🔊 Audio"},
+];
+
+function defaultTasks(){
+  return {
+    play:[{t:"Final script locked"},{t:"Scene order / running sheet"},{t:"Full run-through done"},{t:"Dress rehearsal done"},{t:"Emcee / intro ready"}],
+    content:[
+      {t:"Opening / welcome", vis:[{t:"Welcome slide on screen"},{t:"Hall lighting set"}], aud:[{t:"Intro music ready"},{t:"Welcome mic tested"}]},
+      {t:"School play", vis:[{t:"Stage backdrop set"},{t:"Scene lighting cues"},{t:"Slideshow / projector tested"}], aud:[{t:"Scene soundtrack loaded"},{t:"Cast mics tested"},{t:"Cue sheet written"}]},
+      {t:"Awards / certificates", vis:[{t:"Name slides in order"},{t:"Photographer ready"}], aud:[{t:"Name pronunciation list"},{t:"Applause / music cue"}]},
+      {t:"Closing", vis:[{t:"Thank-you slide"},{t:"Group photo setup"}], aud:[{t:"Closing music"},{t:"Backup audio on 2nd device"}]},
+    ],
+    train:[{t:"Lines / songs memorized"},{t:"Blocking & moves set"},{t:"Group rehearsal done"},{t:"Dress rehearsal done"},{t:"Line-up & entrances clear"}],
+    cloth:[{t:"Costumes assigned per child"},{t:"Sizes fitted & adjusted"},{t:"Each outfit labeled with name"},{t:"Spares for accidents ready"},{t:"Quick-change plan set"}],
+    prop:[{t:"Props list finalized"},{t:"Props built / sourced"},{t:"Props labeled per scene"},{t:"Set & strike plan"},{t:"Backup for fragile props"}],
+  };
+}
+
+function isoAddDays(n){const d=new Date(2026,5,15);d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);}
+
+function mkItem(it){
+  const o={t:it.t,done:false};
+  if(it.vis||it.aud){o.vis=(it.vis||[]).map(s=>({t:s.t,done:false}));o.aud=(it.aud||[]).map(s=>({t:s.t,done:false}));}
+  return o;
+}
+// editable team label (shared across all events); falls back to the WS_META default
+function teamName(key){
+  const def=(WS_META.find(w=>w.key===key)||{}).name||key;
+  return (data.teamNames&&data.teamNames[key])||def;
+}
+function defaultData(){
+  const grades=["Grade 1","Grade 2","Grade 3","Grade 4","Grade 5"];
+  return {teamNames:{}, events: grades.map((g,i)=>{
+    const tasks=defaultTasks();
+    const streams={};
+    WS_META.forEach(w=>{
+      streams[w.key]={lead:"", items:tasks[w.key].map(mkItem)};
+    });
+    return {id:"ev"+i, name:g+" Graduation", grade:g+" · Festival & Play", date:isoAddDays(i), streams};
+  })};
+}
+// merge any old separate Visuals/Audio streams into one Content stream
+function migrate(d){
+  if(!d.teamNames) d.teamNames={};
+  (d.events||[]).forEach(ev=>{
+    ev.streams=ev.streams||{};
+    if(ev.streams.vis||ev.streams.aud){
+      const items=[];
+      (ev.streams.vis?.items||[]).forEach(it=>items.push({t:it.t,done:!!it.done,cat:"vis"}));
+      (ev.streams.aud?.items||[]).forEach(it=>items.push({t:it.t,done:!!it.done,cat:"aud"}));
+      const lead=ev.streams.vis?.lead||ev.streams.aud?.lead||"";
+      ev.streams.content={lead,items};
+      delete ev.streams.vis; delete ev.streams.aud;
+    }
+    if(!ev.streams.content) ev.streams.content={lead:"",items:[]};
+    // ensure every content item has Visuals/Audio subtask arrays (drop old cat tag)
+    ev.streams.content.items.forEach(it=>{
+      if(!Array.isArray(it.vis)) it.vis=[];
+      if(!Array.isArray(it.aud)) it.aud=[];
+      delete it.cat;
+    });
+  });
+  return d;
+}
+
+let data = load();
+let view = {mode:"overview", eventId:null};
+let focusSel = null;
+
+function load(){
+  let r=null;
+  try{r=localStorage.getItem(LS_KEY);}catch(e){}
+  if(r){
+    window.__rawStored=r; // keep a copy of exactly what's in storage, for recovery
+    try{return migrate(JSON.parse(r));}
+    catch(e){ console.error("Could not parse stored data:",e); /* keep raw, fall through */ }
+  }
+  return defaultData();
+}
+function downloadText(text,name){
+  const blob=new Blob([text],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);a.download=name;
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+
+/* ============ ON-DISK STORAGE (project folder) ============ */
+const fsSupported = (typeof window!=="undefined") && ("showDirectoryPicker" in window);
+let dirHandle=null;        // the project folder
+let diskTimer=null;        // debounce
+let lastHistoryAt=0;       // throttle history snapshots
+function setDiskStatus(txt,cls){
+  const el=document.getElementById("diskStatus");
+  if(el){el.textContent=txt;el.className="diskstatus "+(cls||"");}
+}
+// tiny IndexedDB to remember the folder handle between sessions
+function idb(mode,fn){
+  return new Promise((res,rej)=>{
+    const r=indexedDB.open("gradFestivalFS",1);
+    r.onupgradeneeded=()=>r.result.createObjectStore("kv");
+    r.onerror=()=>rej(r.error);
+    r.onsuccess=()=>{const db=r.result;const tx=db.transaction("kv",mode);const st=tx.objectStore("kv");fn(st,res,rej);};
+  });
+}
+const idbGet=k=>idb("readonly",(st,res,rej)=>{const g=st.get(k);g.onsuccess=()=>res(g.result);g.onerror=()=>rej(g.error);});
+const idbSet=(k,v)=>idb("readwrite",(st,res,rej)=>{const p=st.put(v,k);p.onsuccess=()=>res();p.onerror=()=>rej(p.error);});
+async function verifyPerm(h){
+  if(!h) return false;
+  const opts={mode:"readwrite"};
+  if(await h.queryPermission(opts)==="granted") return true;
+  if(await h.requestPermission(opts)==="granted") return true;
+  return false;
+}
+async function getFile(dir,path,create){
+  // path like "data/board.json"
+  const parts=path.split("/");
+  let cur=dir;
+  for(let i=0;i<parts.length-1;i++) cur=await cur.getDirectoryHandle(parts[i],{create});
+  return cur.getFileHandle(parts[parts.length-1],{create});
+}
+async function readDisk(){
+  try{
+    const fh=await getFile(dirHandle,"data/board.json",false);
+    const txt=await (await fh.getFile()).text();
+    const parsed=JSON.parse(txt);
+    const d=parsed&&parsed.data?parsed.data:parsed;
+    if(d&&Array.isArray(d.events)) return d;
+  }catch(e){/* no file yet */}
+  return null;
+}
+async function writeFile(path,text){
+  const fh=await getFile(dirHandle,path,true);
+  const w=await fh.createWritable();
+  await w.write(text);await w.close();
+}
+async function writeDisk(){
+  if(!dirHandle) return;
+  try{
+    const payload=JSON.stringify({app:"grad-festival-command-center",version:1,savedAt:new Date().toISOString(),data},null,2);
+    await writeFile("data/board.json",payload);
+    const now=Date.now();
+    if(now-lastHistoryAt>120000){ // a restore point at most every 2 min
+      lastHistoryAt=now;
+      const stamp=new Date().toISOString().slice(0,19).replace(/[:T]/g,"-");
+      await writeFile("history/board-"+stamp+".json",payload);
+    }
+    setDiskStatus("✔ Saved to folder · "+new Date().toLocaleTimeString(),"ok");
+  }catch(e){ setDiskStatus("⚠ Couldn't write to folder","warn"); }
+}
+function scheduleDiskSave(){
+  if(!dirHandle) return;
+  setDiskStatus("Saving…","");
+  clearTimeout(diskTimer);
+  diskTimer=setTimeout(writeDisk,700);
+}
+async function connectFolder(){
+  if(!fsSupported){
+    alert("Saving straight to a folder needs Chrome, Edge, or another Chromium browser.\n\nOpen this index.html file in Chrome (double-click it in the EventOrg folder), then click “Connect project folder”. In other browsers you can still use Save backup / Restore.");
+    return;
+  }
+  try{
+    dirHandle=await window.showDirectoryPicker({mode:"readwrite",startIn:"documents"});
+    if(!(await verifyPerm(dirHandle))){dirHandle=null;return;}
+    try{await idbSet("dir",dirHandle);}catch(e){}
+    const disk=await readDisk();
+    if(disk){
+      if(confirm("Found a saved board in this folder. Load it? (Click Cancel to keep what's on screen and overwrite the file instead.)")){
+        data=migrate(disk);view={mode:"overview",eventId:null};
+      }
+    }
+    await writeDisk();
+    renderActive();
+    setDiskStatus("✔ Connected to project folder","ok");
+  }catch(e){ /* user cancelled picker */ }
+}
+async function autoReconnect(){
+  if(!fsSupported) { setDiskStatus("Folder save needs Chrome (use Save backup here)","warn"); return; }
+  try{
+    const h=await idbGet("dir");
+    if(h){
+      if(await h.queryPermission({mode:"readwrite"})==="granted"){
+        dirHandle=h;
+        const disk=await readDisk();
+        if(disk){data=migrate(disk);renderActive();}
+        setDiskStatus("✔ Connected to project folder","ok");
+        return;
+      }
+      setDiskStatus("Click “Connect project folder” to resume saving","warn");
+      return;
+    }
+    setDiskStatus("Not connected — click “Connect project folder”","");
+  }catch(e){ setDiskStatus("Not connected — click “Connect project folder”",""); }
+}
+function renderActive(){
+  if(view.mode==="detail") renderDetail();
+  else if(view.mode==="people") renderPeople();
+  else renderOverview();
+}
+function save(){
+  const json=JSON.stringify(data);
+  try{localStorage.setItem(LS_KEY,json);}catch(e){}
+  // rolling in-storage snapshots (safety net: keeps the last 12 versions)
+  try{
+    const hist=JSON.parse(localStorage.getItem(HIST_KEY)||"[]");
+    const last=hist[hist.length-1];
+    if(!last||last.json!==json){
+      hist.push({t:new Date().toISOString(),json});
+      while(hist.length>12) hist.shift();
+      localStorage.setItem(HIST_KEY,JSON.stringify(hist));
+    }
+  }catch(e){}
+  scheduleDiskSave(); // write to the connected project folder, if any
+}
+
+function fmtDate(iso){
+  const d=new Date(iso+"T00:00:00");
+  if(isNaN(d)) return iso;
+  return d.toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
+}
+function daysUntil(iso){
+  const today=new Date();today.setHours(0,0,0,0);
+  const d=new Date(iso+"T00:00:00");
+  return Math.round((d-today)/86400000);
+}
+function eventStats(ev){
+  let done=0,total=0;
+  WS_META.forEach(w=>{(ev.streams[w.key]?.items||[]).forEach(i=>{total++;if(i.done)done++;});});
+  return {done,total,pct: total? Math.round(done/total*100):0};
+}
+function streamStats(s){
+  const total=s.items.length, done=s.items.filter(i=>i.done).length;
+  return {done,total,pct: total? Math.round(done/total*100):0};
+}
+
+function progClass(pct){return pct>=100?"badge-ok":pct>=50?"badge-warn":"badge-risk";}
+
+/* ---------- OVERVIEW ---------- */
+function renderOverview(){
+  document.getElementById("detail").classList.add("hidden");
+  document.getElementById("people").classList.add("hidden");
+  const ov=document.getElementById("overview");
+  ov.classList.remove("hidden");
+  let html='<div class="overview">';
+  data.events
+    .slice()
+    .sort((a,b)=>a.date.localeCompare(b.date))
+    .forEach(ev=>{
+      const s=eventStats(ev);
+      const du=daysUntil(ev.date);
+      let dtxt, dcls;
+      if(du<0){dtxt="done";dcls="badge-ok";}
+      else if(du===0){dtxt="TODAY";dcls="badge-risk";}
+      else if(du===1){dtxt="tomorrow";dcls="badge-risk";}
+      else {dtxt="in "+du+"d";dcls=du<=2?"badge-warn":"badge-ok";}
+      html+=`<div class="ev-card ${view.eventId===ev.id?'active':''}" data-id="${ev.id}">
+        <span class="daystag ${dcls}">${dtxt}</span>
+        <div class="ev-date">${fmtDate(ev.date)}</div>
+        <div class="ev-name">${esc(ev.name)}</div>
+        <div class="ev-grade">${esc(ev.grade)}</div>
+        <span class="countpill ${progClass(s.pct)}">${s.done}/${s.total} done · ${s.pct}%</span>
+        <div class="prog"><span style="width:${s.pct}%"></span></div>
+        <div class="ev-meta"><span>${riskNote(ev)}</span><span>Open →</span></div>
+      </div>`;
+  });
+  html+='</div>';
+  ov.innerHTML=html;
+  ov.querySelectorAll(".ev-card").forEach(c=>c.onclick=()=>openEvent(c.dataset.id));
+}
+function riskNote(ev){
+  // surface the least-complete workstream
+  let worst=null;
+  WS_META.forEach(w=>{
+    const st=streamStats(ev.streams[w.key]);
+    if(!worst||st.pct<worst.pct) worst={name:teamName(w.key),pct:st.pct};
+  });
+  if(!worst||worst.pct>=100) return "✅ all teams ready";
+  return "⚠ "+worst.name.replace(/^[^ ]+ /,"")+" "+worst.pct+"%";
+}
+
+/* ---------- DETAIL ---------- */
+function openEvent(id){view={mode:"detail",eventId:id};renderDetail();}
+function renderDetail(){
+  document.getElementById("overview").classList.add("hidden");
+  document.getElementById("people").classList.add("hidden");
+  const d=document.getElementById("detail");
+  d.classList.remove("hidden");
+  const ev=data.events.find(e=>e.id===view.eventId);
+  if(!ev){renderOverview();return;}
+  const s=eventStats(ev);
+  let html=`<div class="detail-head">
+      <h2><span class="editfield" data-edit="name">${esc(ev.name)}</span></h2>
+      <span class="countpill ${progClass(s.pct)}">${s.done}/${s.total} · ${s.pct}% ready</span>
+    </div>
+    <div class="eyebrow">
+      📅 <span class="editfield" data-edit="date">${esc(ev.date)}</span> (${fmtDate(ev.date)}) ·
+      <span class="editfield" data-edit="grade">${esc(ev.grade)}</span>
+      &nbsp;·&nbsp;<button class="ghost" id="delEvent">delete event</button>
+    </div>
+    <div class="legend">
+      <span>Click any text to edit it.</span>
+      <span>Set a team lead per area.</span>
+      <span>Tick tasks as your teams finish.</span>
+    </div>
+    <div class="streams">`;
+  WS_META.forEach(w=>{
+    const stream=ev.streams[w.key];
+    const st=streamStats(stream);
+    html+=`<div class="stream${w.key==='content'?' wide':''}">
+      <div class="stream-head">
+        <span class="dot" style="background:${w.color}"></span>
+        <span class="stream-title editfield" data-teamname="${w.key}" title="rename this team">${esc(teamName(w.key))}</span>
+        <span class="stream-prog">${st.done}/${st.total}</span>
+      </div>
+      <div class="owner-row">
+        <label>Topic lead:</label>
+        <span class="owner-val editfield" data-lead="${w.key}">${stream.lead?esc(stream.lead):'<span style="color:var(--muted)">tap to assign…</span>'}</span>
+      </div>`;
+    if(w.key==="content"){
+      html+=`<ul class="tasks">`;
+      stream.items.forEach((it,idx)=>{
+        const vis=it.vis||[], aud=it.aud||[];
+        const subTot=vis.length+aud.length;
+        const subDone=vis.filter(s=>s.done).length+aud.filter(s=>s.done).length;
+        const open=!!it._open;
+        html+=`<li class="ctask ${it.done?'done':''}">
+          <div class="ctask-row">
+            <input type="checkbox" data-ws="content" data-idx="${idx}" ${it.done?'checked':''}>
+            <span class="txt" data-tedit="content|${idx}">${esc(it.t)}</span>
+            <span class="who editfield" data-who="content|${idx}">${it.who?'👤 '+esc(it.who):'<span class="assign">+ assign</span>'}</span>
+            ${subTot?`<span class="subcount">${subDone}/${subTot}</span>`:''}
+            <button class="exp ${open?'on':''}" data-exp="${idx}" title="show Visuals & Audio">${open?'▾':'▸'} subtasks</button>
+            <button class="ghost" data-del="content|${idx}" title="remove">✕</button>
+          </div>`;
+        if(open){
+          html+=`<div class="subwrap">`;
+          CONTENT_CATS.forEach(cat=>{
+            const arr=it[cat.key]||[];
+            html+=`<div class="subhead">${cat.name} <span class="subcount">${arr.filter(s=>s.done).length}/${arr.length}</span></div><ul class="subtasks">`;
+            arr.forEach((st,sidx)=>{
+              html+=`<li class="subtask ${st.done?'done':''}">
+                <input type="checkbox" data-subcheck="${idx}|${cat.key}|${sidx}" ${st.done?'checked':''}>
+                <span class="txt" data-stedit="${idx}|${cat.key}|${sidx}">${esc(st.t)}</span>
+                <span class="who editfield" data-swho="${idx}|${cat.key}|${sidx}">${st.who?'👤 '+esc(st.who):'<span class="assign">+ assign</span>'}</span>
+                <button class="ghost" data-subdel="${idx}|${cat.key}|${sidx}" title="remove">✕</button>
+              </li>`;
+            });
+            html+=`</ul><input class="add-task sub" type="text" data-subadd="${idx}|${cat.key}" placeholder="＋ add ${cat.name.replace(/^[^ ]+ /,'').toLowerCase()} subtask…">`;
+          });
+          html+=`</div>`;
+        }
+        html+=`</li>`;
+      });
+      html+=`</ul><input class="add-task" type="text" data-add="content" placeholder="＋ add a content item and press Enter…"></div>`;
+    } else {
+      html+=`<ul class="tasks">`;
+      stream.items.forEach((it,idx)=>{
+        html+=`<li class="task ${it.done?'done':''}">
+          <input type="checkbox" data-ws="${w.key}" data-idx="${idx}" ${it.done?'checked':''}>
+          <span class="txt" data-tedit="${w.key}|${idx}">${esc(it.t)}</span>
+          <span class="who editfield" data-who="${w.key}|${idx}">${it.who?'👤 '+esc(it.who):'<span class="assign">+ assign</span>'}</span>
+          <button class="ghost" data-del="${w.key}|${idx}" title="remove">✕</button>
+        </li>`;
+      });
+      html+=`</ul><input class="add-task" type="text" data-add="${w.key}" placeholder="＋ type a task and press Enter…"></div>`;
+    }
+  });
+  html+='</div>';
+  d.innerHTML=html;
+  wireDetail(ev);
+}
+
+function wireDetail(ev){
+  const d=document.getElementById("detail");
+  // top-level task checkboxes
+  d.querySelectorAll('input[data-ws]').forEach(cb=>cb.onchange=()=>{
+    ev.streams[cb.dataset.ws].items[+cb.dataset.idx].done=cb.checked;save();renderDetail();
+  });
+  // subtask checkboxes
+  d.querySelectorAll('input[data-subcheck]').forEach(cb=>cb.onchange=()=>{
+    const [i,cat,si]=cb.dataset.subcheck.split("|");
+    ev.streams.content.items[+i][cat][+si].done=cb.checked;save();renderDetail();
+  });
+  // expand / collapse a content item
+  d.querySelectorAll('[data-exp]').forEach(b=>b.onclick=()=>{
+    const it=ev.streams.content.items[+b.dataset.exp];it._open=!it._open;save();renderDetail();
+  });
+  d.querySelectorAll('[data-edit]').forEach(el=>el.onclick=()=>inlineEdit(el,()=>ev[el.dataset.edit],v=>{ev[el.dataset.edit]=v;}));
+  d.querySelectorAll('[data-lead]').forEach(el=>el.onclick=()=>inlineEdit(el,()=>ev.streams[el.dataset.lead].lead,v=>{ev.streams[el.dataset.lead].lead=v;}));
+  d.querySelectorAll('[data-teamname]').forEach(el=>el.onclick=()=>inlineEdit(el,()=>teamName(el.dataset.teamname),v=>{data.teamNames[el.dataset.teamname]=v;}));
+  d.querySelectorAll('[data-tedit]').forEach(el=>el.onclick=()=>{
+    const [k,i]=el.dataset.tedit.split("|");
+    inlineEdit(el,()=>ev.streams[k].items[+i].t,v=>{ev.streams[k].items[+i].t=v;});
+  });
+  d.querySelectorAll('[data-stedit]').forEach(el=>el.onclick=()=>{
+    const [i,cat,si]=el.dataset.stedit.split("|");
+    inlineEdit(el,()=>ev.streams.content.items[+i][cat][+si].t,v=>{ev.streams.content.items[+i][cat][+si].t=v;});
+  });
+  d.querySelectorAll('[data-swho]').forEach(el=>el.onclick=()=>{
+    const [i,cat,si]=el.dataset.swho.split("|");
+    inlineEdit(el,()=>ev.streams.content.items[+i][cat][+si].who||"",v=>{ev.streams.content.items[+i][cat][+si].who=v;});
+  });
+  d.querySelectorAll('[data-who]').forEach(el=>el.onclick=()=>{
+    const [k,i]=el.dataset.who.split("|");
+    inlineEdit(el,()=>ev.streams[k].items[+i].who||"",v=>{ev.streams[k].items[+i].who=v;});
+  });
+  d.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{
+    const [k,i]=b.dataset.del.split("|");ev.streams[k].items.splice(+i,1);save();renderDetail();
+  });
+  d.querySelectorAll('[data-subdel]').forEach(b=>b.onclick=()=>{
+    const [i,cat,si]=b.dataset.subdel.split("|");
+    ev.streams.content.items[+i][cat].splice(+si,1);save();renderDetail();
+  });
+  // add a top-level task
+  d.querySelectorAll('input[data-add]').forEach(inp=>inp.onkeydown=e=>{
+    if(e.key!=="Enter")return;
+    const v=inp.value.trim();if(!v)return;
+    const item=inp.dataset.add==="content"?{t:v,done:false,_open:true,vis:[],aud:[]}:{t:v,done:false};
+    ev.streams[inp.dataset.add].items.push(item);save();
+    focusSel='input[data-add="'+inp.dataset.add+'"]';renderDetail();
+  });
+  // add a Visuals/Audio subtask
+  d.querySelectorAll('input[data-subadd]').forEach(inp=>inp.onkeydown=e=>{
+    if(e.key!=="Enter")return;
+    const v=inp.value.trim();if(!v)return;
+    const [i,cat]=inp.dataset.subadd.split("|");
+    (ev.streams.content.items[+i][cat]||(ev.streams.content.items[+i][cat]=[])).push({t:v,done:false});save();
+    focusSel='input[data-subadd="'+i+'|'+cat+'"]';renderDetail();
+  });
+  if(focusSel){
+    const tgt=d.querySelector(focusSel);
+    if(tgt){tgt.focus();tgt.scrollIntoView({block:"center"});}
+    focusSel=null;
+  }
+  document.getElementById("delEvent").onclick=()=>{
+    if(confirm("Delete this whole event?")){data.events=data.events.filter(e=>e.id!==ev.id);save();renderOverview();document.getElementById("overviewBtn").click();}
+  };
+}
+
+function inlineEdit(el,get,set){
+  const cur=get();
+  const inp=document.createElement(el.dataset.edit==="grade"?"input":"input");
+  inp.type=el.dataset.edit==="date"?"date":"text";
+  inp.value=cur||"";
+  inp.style.font="inherit";inp.style.width=Math.max(120,(cur?cur.length:10)*9)+"px";
+  inp.style.padding="2px 5px";inp.style.border="1px solid var(--accent)";inp.style.borderRadius="6px";
+  el.replaceWith(inp);inp.focus();inp.select&&inp.select();
+  function commit(){set(inp.value.trim());save();renderDetail();}
+  inp.onblur=commit;
+  inp.onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();inp.blur();}if(e.key==="Escape"){renderDetail();}};
+}
+
+function esc(s){return (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+/* ---------- BY PERSON ---------- */
+function collectAssignments(){
+  const map={}, unassigned=[];
+  function add(name,entry){
+    if(name&&name.trim()){
+      const key=name.trim().toLowerCase();
+      (map[key]||(map[key]={name:name.trim(),items:[]})).items.push(entry);
+    } else if(entry.assignable){ unassigned.push(entry); }
+  }
+  data.events.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(ev=>{
+    WS_META.forEach(w=>{
+      const stream=ev.streams[w.key];
+      const tn=teamName(w.key);
+      add(stream.lead,{evName:ev.name,date:ev.date,team:tn,kind:'topic',text:tn.replace(/^[^ ]+ /,'')+' — topic lead',done:null,assignable:false});
+      stream.items.forEach((it,idx)=>{
+        add(it.who,{evName:ev.name,date:ev.date,team:tn,kind:'task',text:it.t,done:!!it.done,assignable:true,sel:{evId:ev.id,ws:w.key,idx}});
+        if(w.key==='content'){
+          CONTENT_CATS.forEach(cat=>{
+            (it[cat.key]||[]).forEach((st,sidx)=>{
+              add(st.who,{evName:ev.name,date:ev.date,team:cat.name,kind:'subtask',text:it.t+' › '+st.t,done:!!st.done,assignable:true,sel:{evId:ev.id,ws:'content',idx,catKey:cat.key,sidx}});
+            });
+          });
+        }
+      });
+    });
+  });
+  return {map,unassigned};
+}
+function dayTag(iso){
+  const du=daysUntil(iso);
+  if(du<0) return '<span class="daytag badge-ok">done day</span>';
+  if(du===0) return '<span class="daytag badge-risk">TODAY</span>';
+  if(du===1) return '<span class="daytag badge-risk">tomorrow</span>';
+  return '<span class="daytag '+(du<=2?'badge-warn':'badge-ok')+'">in '+du+'d</span>';
+}
+function rowHtml(e){
+  const cb = e.assignable
+    ? `<input type="checkbox" data-pcheck='${JSON.stringify(e.sel)}' ${e.done?'checked':''}>`
+    : `<span class="rolepin">★</span>`;
+  return `<li class="prow ${e.done?'done':''}">
+    ${cb}
+    <span class="ptext">${esc(e.text)}</span>
+    <span class="ctx">${esc(e.evName)} · ${esc(e.team)}</span>
+    ${dayTag(e.date)}
+  </li>`;
+}
+function renderPeople(){
+  document.getElementById("overview").classList.add("hidden");
+  document.getElementById("detail").classList.add("hidden");
+  const p=document.getElementById("people");
+  p.classList.remove("hidden");
+  const {map,unassigned}=collectAssignments();
+  const people=Object.values(map).sort((a,b)=>a.name.localeCompare(b.name));
+  let html=`<div class="detail-head"><h2>👥 Tasks by person</h2></div>
+    <div class="eyebrow">Everyone's assignments across all 5 events — topic leads (★), task leads and subtask leads. Tick items off right here.</div>`;
+  if(!people.length){
+    html+=`<div class="empty">No names assigned yet. Open an event and use the “＋ assign” chips on tasks and subtasks, or set a Topic lead.</div>`;
+  }
+  html+=`<div class="people-grid">`;
+  people.forEach(pp=>{
+    const work=pp.items.filter(i=>i.assignable);
+    const open=work.filter(i=>!i.done).length, done=work.filter(i=>i.done).length;
+    const roles=pp.items.filter(i=>!i.assignable).length;
+    html+=`<div class="person-card">
+      <div class="person-head">
+        <span class="avatar">${esc(pp.name[0]||'?').toUpperCase()}</span>
+        <span class="pname">${esc(pp.name)}</span>
+        <span class="pcount ${open?'badge-warn':'badge-ok'}">${open} open</span>
+        ${done?`<span class="pcount badge-ok">${done} done</span>`:''}
+      </div>
+      <ul class="plist">${pp.items.map(rowHtml).join("")}</ul>
+    </div>`;
+  });
+  html+=`</div>`;
+  if(unassigned.length){
+    html+=`<details class="person-card unassigned">
+      <summary class="person-head">
+        <span class="avatar warn">!</span>
+        <span class="pname">Unassigned</span>
+        <span class="pcount badge-risk">${unassigned.length} need an owner</span>
+      </summary>
+      <ul class="plist">${unassigned.map(rowHtml).join("")}</ul>
+    </details>`;
+  }
+  p.innerHTML=html;
+  p.querySelectorAll('input[data-pcheck]').forEach(cb=>cb.onchange=()=>{
+    const s=JSON.parse(cb.dataset.pcheck);
+    const ev=data.events.find(e=>e.id===s.evId);if(!ev)return;
+    if(s.catKey!=null) ev.streams[s.ws].items[s.idx][s.catKey][s.sidx].done=cb.checked;
+    else ev.streams[s.ws].items[s.idx].done=cb.checked;
+    save();renderPeople();
+  });
+}
+
+/* ---------- controls ---------- */
+document.getElementById("overviewBtn").onclick=()=>{view={mode:"overview",eventId:null};renderOverview();};
+document.getElementById("peopleBtn").onclick=()=>{view={mode:"people",eventId:null};renderPeople();};
+document.getElementById("addEventBtn").onclick=()=>{
+  const tasks=defaultTasks();const streams={};
+  WS_META.forEach(w=>streams[w.key]={lead:"",items:tasks[w.key].map(mkItem)});
+  const id="ev"+Date.now();
+  data.events.push({id,name:"New Event",grade:"Grade · Festival & Play",date:isoAddDays(data.events.length),streams});
+  save();openEvent(id);
+};
+const themeBtn=document.getElementById("themeBtn");
+function applyTheme(dark){
+  document.body.classList.toggle("dark",dark);
+  themeBtn.textContent=dark?"☀ Light":"🌙 Dark";
+  try{localStorage.setItem("gradFestivalTheme",dark?"dark":"light");}catch(e){}
+}
+themeBtn.onclick=()=>applyTheme(!document.body.classList.contains("dark"));
+applyTheme((function(){try{return localStorage.getItem("gradFestivalTheme")==="dark";}catch(e){return false;}})());
+// --- save / restore backups ---
+document.getElementById("exportBtn").onclick=()=>{
+  const payload=JSON.stringify({app:"grad-festival-command-center",version:1,savedAt:new Date().toISOString(),data},null,2);
+  const blob=new Blob([payload],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="grad-festival-backup-"+new Date().toISOString().slice(0,10)+".json";
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+};
+// --- emergency recovery: read whatever is still in this browser's storage, non-destructively ---
+document.getElementById("recoverBtn").onclick=()=>{
+  let raw=null;
+  try{raw=localStorage.getItem(LS_KEY);}catch(e){}
+  if(!raw) raw=window.__rawStored||null;
+  if(!raw){
+    alert("Nothing is saved in this browser's storage for this board, so there's no earlier data to recover here.\n\nIf you ever clicked “Save backup”, use “Restore” to load that file instead.");
+    return;
+  }
+  // 1) always download a safety copy first, before touching anything
+  downloadText(raw,"grad-festival-RECOVERED-"+new Date().toISOString().slice(0,19).replace(/[:T]/g,"-")+".json");
+  // 2) try to load it back into the board
+  try{
+    const d=JSON.parse(raw);
+    if(!d||!Array.isArray(d.events)) throw new Error("not a board");
+    data=migrate(d);save();view={mode:"overview",eventId:null};renderOverview();
+    alert("Recovered your saved data and reloaded the board ✔\nA safety copy was also downloaded to your computer.");
+  }catch(e){
+    alert("I found saved data and downloaded it as a file, but it couldn't be auto-loaded — the format may be from an older version.\n\nPlease send me that downloaded file and I'll repair it.");
+  }
+};
+document.getElementById("connectBtn").onclick=connectFolder;
+const importFile=document.getElementById("importFile");
+document.getElementById("importBtn").onclick=()=>importFile.click();
+importFile.onchange=()=>{
+  const f=importFile.files&&importFile.files[0];importFile.value="";if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const parsed=JSON.parse(r.result);
+      const d=parsed&&parsed.data?parsed.data:parsed; // accept wrapped or raw
+      if(!d||!Array.isArray(d.events)) throw new Error("no events");
+      if(!confirm("Restoring will replace everything currently on this board. Continue?")) return;
+      data=migrate(d);save();view={mode:"overview",eventId:null};renderOverview();
+      alert("Backup restored ✔");
+    }catch(e){ alert("Sorry — that file doesn't look like a valid backup."); }
+  };
+  r.readAsText(f);
+};
+document.getElementById("printBtn").onclick=()=>window.print();
+document.getElementById("resetBtn").onclick=()=>{
+  if(confirm("Reset everything back to the starting template? Your edits will be lost.")){
+    data=defaultData();save();view={mode:"overview",eventId:null};renderOverview();
+  }
+};
+
+renderOverview();
+autoReconnect();
+</script>
+</body>
+</html>

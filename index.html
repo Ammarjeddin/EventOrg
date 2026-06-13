@@ -132,25 +132,26 @@ button:disabled:hover{border-color:var(--line);color:var(--ink)}
 .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted);margin:2px 0 18px}
 .legend span{display:inline-flex;align-items:center;gap:5px}
 /* by-person view */
-.people-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
-.person-card{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.people-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;align-items:start}
+.person-card{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 1px 2px rgba(31,36,48,.04)}
 .person-card.unassigned{grid-column:1 / -1;border-color:var(--risk-soft)}
 .person-card.unassigned summary{cursor:pointer;list-style:none}
 .person-card.unassigned summary::-webkit-details-marker{display:none}
-.person-head{display:flex;align-items:center;gap:9px;padding:11px 13px;border-bottom:1px solid var(--line)}
-.avatar{width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex:none}
+.person-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);z-index:1}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex:none}
 .avatar.warn{background:var(--risk)}
-.pname{font-weight:700;font-size:15px}
-.pcount{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px}
-.person-head .pcount:first-of-type{margin-left:auto}
+.pname{font-weight:700;font-size:15px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pcount{font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;flex:none}
 .plist{list-style:none;margin:0;padding:6px}
-.prow{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:8px;font-size:13px}
+.prow{display:grid;grid-template-columns:auto 1fr;align-items:start;gap:4px 10px;padding:9px 10px;border-radius:9px}
+.prow+.prow{border-top:1px solid var(--line)}
 .prow:hover{background:var(--hover)}
-.prow input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);flex:none;cursor:pointer}
-.rolepin{color:var(--warn);font-size:13px;width:16px;text-align:center;flex:none}
-.prow .ptext{flex:1}
+.prow input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);flex:none;cursor:pointer;margin-top:1px}
+.rolepin{color:var(--warn);font-size:15px;width:18px;text-align:center;flex:none;margin-top:1px}
+.prow .ptext{font-size:13.5px;line-height:1.35}
 .prow.done .ptext{text-decoration:line-through;color:var(--muted)}
-.ctx{font-size:11px;color:var(--muted);white-space:nowrap}
+.prow .pmeta{grid-column:2;display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:1px}
+.ctx{font-size:11.5px;color:var(--muted)}
 .daytag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;white-space:nowrap}
 .empty{background:var(--card);border:1px dashed var(--line);border-radius:12px;padding:18px;color:var(--muted)}
 @media print{.bar,.add-task,.ghost,.exp{display:none}.stream,.person-card{break-inside:avoid}}
@@ -217,6 +218,7 @@ body.readonly .subtask input[type=checkbox],body.readonly .prow input[type=check
     <button id="connectSheetBtn" title="Create or open a shared online board">🔗 Share online</button>
     <button id="editModeBtn" title="Enter the password to edit this shared board" style="display:none">✏️ Edit mode</button>
     <button id="saveOnlineBtn" class="primary" title="Save your changes to the shared online board" style="display:none">💾 Save online</button>
+    <button id="changePwBtn" title="Change the edit password for this shared board" style="display:none">🔑 Change password</button>
     <button id="deleteBoardBtn" class="ghost" title="Permanently delete this shared online board" style="display:none">🗑 Delete board</button>
     <button id="exportBtn" title="Download all data as a backup file">⬇ Save backup</button>
     <button id="importBtn" title="Load data from a backup file">⬆ Restore</button>
@@ -564,9 +566,34 @@ function applyReadOnly(){
   document.body.classList.toggle("readonly",readOnly);
   const eb=document.getElementById("editModeBtn");
   if(eb) eb.style.display=(sheetState&&readOnly)?"":"none";
+  const editing=sheetState&&!readOnly; // only an editor can change pw / delete
+  const cp=document.getElementById("changePwBtn");
+  if(cp) cp.style.display=editing?"":"none";
   const db=document.getElementById("deleteBoardBtn");
-  if(db) db.style.display=(sheetState&&!readOnly)?"":"none"; // only an editor can delete
+  if(db) db.style.display=editing?"":"none";
   updateSaveBtn();
+}
+// change the shared board's edit password (editor only; pushes to the bin immediately)
+async function changePassword(){
+  if(!sheetState||readOnly) return;
+  if(!JSONBIN_KEY){ setDiskStatus("⚠ Online sharing isn't configured (missing API key)","warn"); return; }
+  const np=prompt("Enter a NEW edit password for this shared board.\nEveryone who edits will need this from now on — share it with your co-editors.");
+  if(np===null) return;
+  const pw=np.trim();
+  if(!pw){ alert("Password can't be empty."); return; }
+  if(prompt("Re-type the new password to confirm:")!==pw){ alert("The passwords didn't match — nothing changed."); return; }
+  const prev=sheetState.password;
+  sheetState.password=pw;
+  setDiskStatus("Updating password…","");
+  try{
+    await updateBin(sheetState.id,{password:pw,data:cleanData()});
+    unsavedChanges=false; rememberSheet(); updateSaveBtn();
+    setDiskStatus("🔑 Password updated · board "+sheetState.id,"ok");
+    alert("Password changed. Share the new password with anyone who should edit this board.");
+  }catch(e){
+    sheetState.password=prev; // roll back on failure
+    setDiskStatus("⚠ Couldn't update the password — try again","warn");
+  }
 }
 // permanently delete the connected shared online board (editor only; double-confirmed)
 async function deleteBoard(){
@@ -1106,12 +1133,14 @@ function dayTag(iso){
 function rowHtml(e){
   const cb = e.assignable
     ? `<input type="checkbox" data-pcheck='${JSON.stringify(e.sel)}' ${e.done?'checked':''}>`
-    : `<span class="rolepin">★</span>`;
+    : `<span class="rolepin" title="topic lead">★</span>`;
   return `<li class="prow ${e.done?'done':''}">
     ${cb}
     <span class="ptext">${esc(e.text)}</span>
-    <span class="ctx">${esc(e.evName)} · ${esc(e.team)}</span>
-    ${dayTag(e.date)}
+    <span class="pmeta">
+      <span class="ctx">${esc(e.evName)} · ${esc(e.team)}</span>
+      ${dayTag(e.date)}
+    </span>
   </li>`;
 }
 function renderPeople(){
@@ -1191,6 +1220,7 @@ document.getElementById("connectBtn").onclick=connectFolder;
 document.getElementById("connectSheetBtn").onclick=connectSheet;
 document.getElementById("editModeBtn").onclick=()=>enterEditMode();
 document.getElementById("saveOnlineBtn").onclick=saveOnline;
+document.getElementById("changePwBtn").onclick=changePassword;
 document.getElementById("deleteBoardBtn").onclick=deleteBoard;
 // Remind the user to save a shared board before leaving with unsaved changes.
 window.addEventListener("beforeunload",e=>{

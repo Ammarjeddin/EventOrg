@@ -13,6 +13,9 @@ It uses a free online JSON store (JSONBin) built into the app — **no accounts,
 2. Click **🔗 Share online** → leave the box blank → **OK**.
 3. The app creates an online board and shows you a **board ID** (a 24-character code).
 4. Share that **board ID** with others. The default edit password is **`123456`**.
+5. **Change the password** (recommended): while editing, click **🔑 Change password**, enter a new one
+   and re-type it to confirm. It takes effect for everyone immediately — share the new password with
+   your co-editors.
 
 ## Open / view a board someone shared
 

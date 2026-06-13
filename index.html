@@ -421,8 +421,9 @@ async function writeFile(path,text){
 function cleanData(){
   const d=JSON.parse(JSON.stringify(data));
   (d.events||[]).forEach(ev=>{
-    const content=ev.streams&&ev.streams.content;
-    (content&&content.items||[]).forEach(it=>{delete it._open;});
+    Object.values(ev.streams||{}).forEach(s=>{
+      (s&&s.items||[]).forEach(it=>{delete it._open;});
+    });
   });
   return d;
 }
@@ -908,24 +909,38 @@ function renderDetail(){
         <label>Topic lead:</label>
         <span class="owner-val editfield" data-lead="${w.key}">${stream.lead?esc(stream.lead):'<span style="color:var(--muted)">tap to assign…</span>'}</span>
       </div>`;
-    if(w.key==="content"){
-      html+=`<ul class="tasks">`;
-      stream.items.forEach((it,idx)=>{
-        const vis=it.vis||[], aud=it.aud||[];
-        const subTot=vis.length+aud.length;
-        const subDone=vis.filter(s=>s.done).length+aud.filter(s=>s.done).length;
-        const open=!!it._open;
-        html+=`<li class="ctask ${it.done?'done':''}">
-          <div class="ctask-row">
-            <input type="checkbox" data-ws="content" data-idx="${idx}" ${it.done?'checked':''}>
-            <span class="txt" data-tedit="content|${idx}">${esc(it.t)}</span>
-            <span class="who editfield" data-who="content|${idx}">${it.who?'👤 '+esc(it.who):'<span class="assign">+ assign</span>'}</span>
-            ${subTot?`<span class="subcount">${subDone}/${subTot}</span>`:''}
-            <button class="exp ${open?'on':''}" data-exp="${idx}" title="show Visuals & Audio">${open?'▾':'▸'} subtasks</button>
-            <button class="ghost" data-del="content|${idx}" title="remove">✕</button>
-          </div>`;
-        if(open){
-          html+=`<div class="subwrap">`;
+    const isContent=w.key==="content";
+    html+=`<ul class="tasks">`;
+    stream.items.forEach((it,idx)=>{
+      const subs=it.subs||[];
+      const vis=isContent?(it.vis||[]):[], aud=isContent?(it.aud||[]):[];
+      const subTot=subs.length+vis.length+aud.length;
+      const subDone=subs.filter(s=>s.done).length+vis.filter(s=>s.done).length+aud.filter(s=>s.done).length;
+      const open=!!it._open;
+      html+=`<li class="ctask ${it.done?'done':''}">
+        <div class="ctask-row">
+          <input type="checkbox" data-ws="${w.key}" data-idx="${idx}" ${it.done?'checked':''}>
+          <span class="txt" data-tedit="${w.key}|${idx}">${esc(it.t)}</span>
+          <span class="who editfield" data-who="${w.key}|${idx}">${it.who?'👤 '+esc(it.who):'<span class="assign">+ assign</span>'}</span>
+          ${subTot?`<span class="subcount">${subDone}/${subTot}</span>`:''}
+          <button class="exp ${open?'on':''}" data-exp="${w.key}|${idx}" title="show subtasks">${open?'▾':'▸'} subtasks</button>
+          <button class="ghost" data-del="${w.key}|${idx}" title="remove">✕</button>
+        </div>`;
+      if(open){
+        html+=`<div class="subwrap">`;
+        // generic flat subtasks — available on EVERY topic
+        html+=`<ul class="subtasks">`;
+        subs.forEach((st,sidx)=>{
+          html+=`<li class="subtask ${st.done?'done':''}">
+            <input type="checkbox" data-gsubcheck="${w.key}|${idx}|${sidx}" ${st.done?'checked':''}>
+            <span class="txt" data-gstedit="${w.key}|${idx}|${sidx}">${esc(st.t)}</span>
+            <span class="who editfield" data-gswho="${w.key}|${idx}|${sidx}">${st.who?'👤 '+esc(st.who):'<span class="assign">+ assign</span>'}</span>
+            <button class="ghost" data-gsubdel="${w.key}|${idx}|${sidx}" title="remove">✕</button>
+          </li>`;
+        });
+        html+=`</ul><input class="add-task sub" type="text" data-gsubadd="${w.key}|${idx}" placeholder="＋ add a subtask…">`;
+        // content keeps its extra Visuals / Audio panes
+        if(isContent){
           CONTENT_CATS.forEach(cat=>{
             const arr=it[cat.key]||[];
             html+=`<div class="subhead">${cat.name} <span class="subcount">${arr.filter(s=>s.done).length}/${arr.length}</span></div><ul class="subtasks">`;
@@ -939,23 +954,12 @@ function renderDetail(){
             });
             html+=`</ul><input class="add-task sub" type="text" data-subadd="${idx}|${cat.key}" placeholder="＋ add ${cat.name.replace(/^[^ ]+ /,'').toLowerCase()} subtask…">`;
           });
-          html+=`</div>`;
         }
-        html+=`</li>`;
-      });
-      html+=`</ul><input class="add-task" type="text" data-add="content" placeholder="＋ add a content item and press Enter…"></div>`;
-    } else {
-      html+=`<ul class="tasks">`;
-      stream.items.forEach((it,idx)=>{
-        html+=`<li class="task ${it.done?'done':''}">
-          <input type="checkbox" data-ws="${w.key}" data-idx="${idx}" ${it.done?'checked':''}>
-          <span class="txt" data-tedit="${w.key}|${idx}">${esc(it.t)}</span>
-          <span class="who editfield" data-who="${w.key}|${idx}">${it.who?'👤 '+esc(it.who):'<span class="assign">+ assign</span>'}</span>
-          <button class="ghost" data-del="${w.key}|${idx}" title="remove">✕</button>
-        </li>`;
-      });
-      html+=`</ul><input class="add-task" type="text" data-add="${w.key}" placeholder="＋ type a task and press Enter…"></div>`;
-    }
+        html+=`</div>`;
+      }
+      html+=`</li>`;
+    });
+    html+=`</ul><input class="add-task" type="text" data-add="${w.key}" placeholder="＋ type a task and press Enter…"></div>`;
   });
   html+='</div>';
   html+=`<button class="add-topic" id="addTopic">＋ Add topic</button>`;
@@ -969,14 +973,20 @@ function wireDetail(ev){
   d.querySelectorAll('input[data-ws]').forEach(cb=>cb.onchange=()=>{
     ev.streams[cb.dataset.ws].items[+cb.dataset.idx].done=cb.checked;save();renderDetail();
   });
-  // subtask checkboxes
+  // Visuals/Audio subtask checkboxes (content only)
   d.querySelectorAll('input[data-subcheck]').forEach(cb=>cb.onchange=()=>{
     const [i,cat,si]=cb.dataset.subcheck.split("|");
     ev.streams.content.items[+i][cat][+si].done=cb.checked;save();renderDetail();
   });
-  // expand / collapse a content item
+  // generic subtask checkboxes (any topic)
+  d.querySelectorAll('input[data-gsubcheck]').forEach(cb=>cb.onchange=()=>{
+    const [k,i,si]=cb.dataset.gsubcheck.split("|");
+    ev.streams[k].items[+i].subs[+si].done=cb.checked;save();renderDetail();
+  });
+  // expand / collapse a task's subtasks (any topic)
   d.querySelectorAll('[data-exp]').forEach(b=>b.onclick=()=>{
-    const it=ev.streams.content.items[+b.dataset.exp];it._open=!it._open;save();renderDetail();
+    const [k,i]=b.dataset.exp.split("|");
+    const it=ev.streams[k].items[+i];it._open=!it._open;save();renderDetail();
   });
   d.querySelectorAll('[data-edit]').forEach(el=>el.onclick=()=>inlineEdit(el,()=>ev[el.dataset.edit],v=>{ev[el.dataset.edit]=v;}));
   d.querySelectorAll('[data-lead]').forEach(el=>el.onclick=()=>inlineEdit(el,()=>ev.streams[el.dataset.lead].lead,v=>{ev.streams[el.dataset.lead].lead=v;}));
@@ -1036,15 +1046,42 @@ function wireDetail(ev){
     pushUndo('delete subtask “'+t+'”');
     ev.streams.content.items[+i][cat].splice(+si,1);save();renderDetail();
   });
-  // add a top-level task
+  // generic subtask edit / assign / delete (any topic)
+  d.querySelectorAll('[data-gstedit]').forEach(el=>el.onclick=()=>{
+    const [k,i,si]=el.dataset.gstedit.split("|");
+    inlineEdit(el,()=>ev.streams[k].items[+i].subs[+si].t,v=>{ev.streams[k].items[+i].subs[+si].t=v;});
+  });
+  d.querySelectorAll('[data-gswho]').forEach(el=>el.onclick=()=>{
+    const [k,i,si]=el.dataset.gswho.split("|");
+    inlineEdit(el,()=>ev.streams[k].items[+i].subs[+si].who||"",v=>{ev.streams[k].items[+i].subs[+si].who=v;});
+  });
+  d.querySelectorAll('[data-gsubdel]').forEach(b=>b.onclick=()=>{
+    const [k,i,si]=b.dataset.gsubdel.split("|");
+    const t=(ev.streams[k].items[+i].subs[+si]||{}).t||"";
+    if(!confirm("Delete the subtask “"+t+"”?")) return;
+    pushUndo('delete subtask “'+t+'”');
+    ev.streams[k].items[+i].subs.splice(+si,1);save();renderDetail();
+  });
+  // add a top-level task (any topic). content also gets vis/aud arrays.
   d.querySelectorAll('input[data-add]').forEach(inp=>inp.onkeydown=e=>{
     if(e.key!=="Enter")return;
     const v=inp.value.trim();if(!v)return;
-    const item=inp.dataset.add==="content"?{t:v,done:false,_open:true,vis:[],aud:[]}:{t:v,done:false};
-    ev.streams[inp.dataset.add].items.push(item);save();
-    focusSel='input[data-add="'+inp.dataset.add+'"]';renderDetail();
+    const k=inp.dataset.add;
+    const item={t:v,done:false,subs:[]};
+    if(k==="content"){item.vis=[];item.aud=[];}
+    ev.streams[k].items.push(item);save();
+    focusSel='input[data-add="'+k+'"]';renderDetail();
   });
-  // add a Visuals/Audio subtask
+  // add a generic subtask (any topic)
+  d.querySelectorAll('input[data-gsubadd]').forEach(inp=>inp.onkeydown=e=>{
+    if(e.key!=="Enter")return;
+    const v=inp.value.trim();if(!v)return;
+    const [k,i]=inp.dataset.gsubadd.split("|");
+    const it=ev.streams[k].items[+i];
+    (it.subs||(it.subs=[])).push({t:v,done:false});save();
+    focusSel='input[data-gsubadd="'+k+'|'+i+'"]';renderDetail();
+  });
+  // add a Visuals/Audio subtask (content only)
   d.querySelectorAll('input[data-subadd]').forEach(inp=>inp.onkeydown=e=>{
     if(e.key!=="Enter")return;
     const v=inp.value.trim();if(!v)return;
@@ -1110,6 +1147,10 @@ function collectAssignments(){
       add(stream.lead,{evName:ev.name,date:ev.date,team:tn,kind:'topic',text:tn.replace(/^[^ ]+ /,'')+' — topic lead',done:null,assignable:false});
       stream.items.forEach((it,idx)=>{
         add(it.who,{evName:ev.name,date:ev.date,team:tn,kind:'task',text:it.t,done:!!it.done,assignable:true,sel:{evId:ev.id,ws:w.key,idx}});
+        // generic subtasks (any topic)
+        (it.subs||[]).forEach((st,sidx)=>{
+          add(st.who,{evName:ev.name,date:ev.date,team:tn,kind:'subtask',text:it.t+' › '+st.t,done:!!st.done,assignable:true,sel:{evId:ev.id,ws:w.key,idx,subIdx:sidx}});
+        });
         if(w.key==='content'){
           CONTENT_CATS.forEach(cat=>{
             (it[cat.key]||[]).forEach((st,sidx)=>{
@@ -1187,6 +1228,7 @@ function renderPeople(){
     const s=JSON.parse(cb.dataset.pcheck);
     const ev=data.events.find(e=>e.id===s.evId);if(!ev)return;
     if(s.catKey!=null) ev.streams[s.ws].items[s.idx][s.catKey][s.sidx].done=cb.checked;
+    else if(s.subIdx!=null) ev.streams[s.ws].items[s.idx].subs[s.subIdx].done=cb.checked;
     else ev.streams[s.ws].items[s.idx].done=cb.checked;
     save();renderPeople();
   });

@@ -55,9 +55,16 @@ git commit -m "Update board after Monday's event"
 Each commit is a point you can always return to. The `history/` folder also keeps
 automatic JSON restore points even if you never touch git.
 
-## Sharing with the team (later)
+## Sharing with the team
 
-Today this is single-user (data lives in this folder / your browser). When you want
-real-time shared editing with view-only and admin roles, the next step is putting
-`data/board.json` on a shared backend (Firebase/Supabase) or moving to Airtable/
-Google Sheets. Ask and we'll set it up.
+Click **🔗 Share online** to put a board on the internet so others can view it (and edit it
+with a password). It uses a free built-in online store — no accounts or setup. You get a
+**board ID** to share; others paste it to view, and enter the password (default `123456`) to
+edit. Saving is manual (click **💾 Save online**, or it saves when you return to **All events**).
+See **SHARING.md** for the full walkthrough.
+
+> The edit password is a convenience lock (stored with the board, checked in the browser) — it
+> prevents accidents but isn't real security, so don't put anything sensitive in a shared board.
+
+For a private, on-your-own-machine option instead, use **📂 Connect project folder** (saves to a
+folder on your computer, no internet).

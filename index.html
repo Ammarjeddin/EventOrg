@@ -145,6 +145,15 @@ button:disabled:hover{border-color:var(--line);color:var(--ink)}
 .daytag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;white-space:nowrap}
 .empty{background:var(--card);border:1px dashed var(--line);border-radius:12px;padding:18px;color:var(--muted)}
 @media print{.bar,.add-task,.ghost,.exp{display:none}.stream,.person-card{break-inside:avoid}}
+/* read-only (viewing a shared sheet): hide editing affordances, block inline edits */
+body.readonly .add-task,body.readonly .add-topic,body.readonly .topic-tools,
+body.readonly .exp,body.readonly #addEventBtn,body.readonly #undoBtn,
+body.readonly #resetEvent,body.readonly #delEvent,body.readonly #importBtn,
+body.readonly .task .ghost,body.readonly .ctask-row .ghost,body.readonly .subtask .ghost{display:none}
+body.readonly .editfield,body.readonly .txt,body.readonly .who{pointer-events:none}
+body.readonly .editfield:hover,body.readonly .txt:hover,body.readonly .who:hover{border-color:transparent;background:transparent;box-shadow:none}
+body.readonly .task input[type=checkbox],body.readonly .ctask-row input[type=checkbox],
+body.readonly .subtask input[type=checkbox],body.readonly .prow input[type=checkbox]{pointer-events:none;opacity:.6}
 </style>
 </head>
 <body>
@@ -159,6 +168,9 @@ button:disabled:hover{border-color:var(--line);color:var(--ink)}
     <button id="undoBtn" title="Nothing to undo" disabled>↶ Undo</button>
     <div class="spacer"></div>
     <button id="connectBtn" title="Save directly into your EventOrg project folder">📂 Connect project folder</button>
+    <button id="connectSheetBtn" title="Create or open a shared online board">🔗 Share online</button>
+    <button id="editModeBtn" title="Enter the password to edit this shared board" style="display:none">✏️ Edit mode</button>
+    <button id="saveOnlineBtn" class="primary" title="Save your changes to the shared online board" style="display:none">💾 Save online</button>
     <button id="exportBtn" title="Download all data as a backup file">⬇ Save backup</button>
     <button id="importBtn" title="Load data from a backup file">⬆ Restore</button>
     <input type="file" id="importFile" accept="application/json,.json" style="display:none">
@@ -177,6 +189,7 @@ button:disabled:hover{border-color:var(--line);color:var(--ink)}
 <script>
 const LS_KEY = "gradFestivalBoard.v1";
 const HIST_KEY = "gradFestivalBoard.hist";
+const SHEET_KEY = "gradFestivalSheet.v1"; // remembers the connected Google Sheet
 const WS_META = [
   {key:"play",    name:"🎭 School Play",            color:"var(--play)"},
   {key:"content", name:"🖥 Content (Visuals & Audio)", color:"var(--vis)"},
@@ -296,6 +309,13 @@ function downloadText(text,name){
   document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
+
+/* ============ SHARED GOOGLE SHEET STATE ============ */
+// sheetState = {id, gid, password, writeUrl} when a sheet is connected, else null.
+let sheetState=null;
+let readOnly=false;        // true while viewing a shared board without the edit password
+let sheetWriting=false;    // a manual online save is in flight
+let unsavedChanges=false;  // edits made since the last online save (manual-save model)
 
 /* ============ ON-DISK STORAGE (project folder) ============ */
 const fsSupported = (typeof window!=="undefined") && ("showDirectoryPicker" in window);
@@ -439,12 +459,167 @@ async function autoReconnect(){
     setDiskStatus("Not connected — click “Connect project folder”","");
   }catch(e){ setDiskStatus("Not connected — click “Connect project folder”",""); }
 }
+
+/* ============ SHARED ONLINE BOARD (JSONBin — read+write with one built-in key, no login) ============
+ * A "board ID" is a JSONBin bin id. Users share that id. The bin holds {password, data}.
+ * Reading needs no key (public bins). Creating/updating uses the built-in master key below.
+ * The password is a convenience lock checked in the browser — NOT real security.
+ */
+const JSONBIN_KEY = "$2a$10$sfqhQCXvUNt9Z6ceiAT7tOGcRJceIh7VY2e6nKWA/Pp4VGoeuAVlu"; // JSONBin Access Key
+const JSONBIN_BASE = "https://api.jsonbin.io/v3";
+const DEFAULT_PASSWORD = "123456";
+
+// read a bin's {password, data} (public bins read without a key)
+async function readBin(id){
+  const res=await fetch(`${JSONBIN_BASE}/b/${id}/latest?meta=false`);
+  if(!res.ok) throw new Error("read "+res.status);
+  return res.json(); // {password, data}
+}
+// create a new public bin, returns its id
+async function createBin(payload){
+  const res=await fetch(`${JSONBIN_BASE}/b`,{
+    method:"POST",
+    headers:{"Content-Type":"application/json","X-Access-Key":JSONBIN_KEY,"X-Bin-Private":"false"},
+    body:JSON.stringify(payload)
+  });
+  if(!res.ok) throw new Error("create "+res.status);
+  const j=await res.json();
+  return j.metadata.id;
+}
+// overwrite an existing bin
+async function updateBin(id,payload){
+  const res=await fetch(`${JSONBIN_BASE}/b/${id}`,{
+    method:"PUT",
+    headers:{"Content-Type":"application/json","X-Access-Key":JSONBIN_KEY},
+    body:JSON.stringify(payload)
+  });
+  if(!res.ok) throw new Error("update "+res.status);
+  return res.json();
+}
+
+function rememberSheet(){
+  try{ localStorage.setItem(SHEET_KEY,JSON.stringify(sheetState)); }catch(e){}
+}
+function forgetSheet(){
+  sheetState=null;readOnly=false;
+  try{ localStorage.removeItem(SHEET_KEY); }catch(e){}
+}
+function applyReadOnly(){
+  document.body.classList.toggle("readonly",readOnly);
+  const eb=document.getElementById("editModeBtn");
+  if(eb) eb.style.display=(sheetState&&readOnly)?"":"none";
+  updateSaveBtn();
+}
+// MANUAL online save (to stay within JSONBin's free request quota). An edit only
+// marks the board dirty; the user clicks “💾 Save online” to push it to the bin.
+function updateSaveBtn(){
+  const b=document.getElementById("saveOnlineBtn");
+  if(!b) return;
+  const editing=sheetState&&!readOnly;
+  b.style.display=editing?"":"none";
+  b.disabled=!unsavedChanges;
+  b.textContent=unsavedChanges?"💾 Save online*":"💾 Saved";
+}
+// called after every edit while in shared-board edit mode (instead of auto-writing)
+function markUnsaved(){
+  if(!sheetState||readOnly) return;
+  unsavedChanges=true;
+  updateSaveBtn();
+  setDiskStatus("● Unsaved changes — click “Save online” · board "+sheetState.id,"warn");
+}
+async function saveOnline(){
+  if(!sheetState||readOnly) return;
+  if(!JSONBIN_KEY){ setDiskStatus("⚠ Online sharing isn't configured (missing API key)","warn"); return; }
+  if(sheetWriting) return;
+  sheetWriting=true; setDiskStatus("Saving online…","");
+  try{
+    await updateBin(sheetState.id,{password:sheetState.password,data:cleanData()});
+    unsavedChanges=false;
+    setDiskStatus("✔ Saved online · "+new Date().toLocaleTimeString()+" · board "+sheetState.id,"ok");
+  }catch(e){ setDiskStatus("⚠ Couldn't save online — try again","warn"); }
+  finally{ sheetWriting=false; updateSaveBtn(); }
+}
+
+// pull a bin id out of whatever the user pasted (raw id or a URL containing it)
+function parseBoardId(s){
+  s=(s||"").trim();
+  const m=s.match(/([a-f0-9]{24})/i); // JSONBin ids are 24-char hex
+  return m?m[1]:(s||null);
+}
+
+// "🔗 Connect sheet" → paste a shared board id to VIEW it (read-only until Edit mode)
+async function connectSheet(){
+  const input=prompt("Paste a shared board ID (or link) to view it.\nLeave blank and press OK to CREATE a new shared board.");
+  if(input===null) return;
+  dirHandle=null; // leave folder mode
+  if(!input.trim()){ return createSharedBoard(); }
+  const id=parseBoardId(input);
+  if(!id){ alert("That doesn't look like a board ID."); return; }
+  setDiskStatus("Loading shared board…","");
+  let blob;
+  try{ blob=await readBin(id); }
+  catch(e){ alert("Couldn't load that board. Check the ID and that it's shared."); setDiskStatus("⚠ Couldn't load board","warn"); return; }
+  sheetState={id, password:(blob&&blob.password)||DEFAULT_PASSWORD};
+  readOnly=true;
+  if(blob&&blob.data) data=migrate(blob.data);
+  rememberSheet();
+  setDiskStatus("🔗 Viewing shared board "+id+" (read-only) — click “Edit mode” to edit","ok");
+  view={mode:"overview",eventId:null};
+  applyReadOnly();renderActive();
+}
+
+// create a brand-new shared board from the CURRENT data, seeded with the default password
+async function createSharedBoard(){
+  if(!JSONBIN_KEY){ alert("Online sharing isn't set up yet (the app is missing its API key)."); return; }
+  setDiskStatus("Creating shared board…","");
+  try{
+    const id=await createBin({password:DEFAULT_PASSWORD,data:cleanData()});
+    sheetState={id, password:DEFAULT_PASSWORD};
+    readOnly=false; unsavedChanges=false; rememberSheet(); applyReadOnly();
+    setDiskStatus("✏️ Editing shared board "+id,"ok");
+    renderActive();
+    prompt("Shared board created! Share this board ID with others (they paste it under “Share online”).\nEdit password is “"+DEFAULT_PASSWORD+"”.",id);
+  }catch(e){ alert("Couldn't create a shared board right now."); setDiskStatus("⚠ Couldn't create board","warn"); }
+}
+
+// "✏️ Edit mode" → type the password to unlock editing for this session
+async function enterEditMode(pwArg){
+  if(!sheetState) return;
+  if(!readOnly){ return; } // already editing
+  const pw=(typeof pwArg==="string")?pwArg:prompt("Enter the edit password to make changes:");
+  if(pw===null||pw===undefined) return;
+  if(pw!==sheetState.password){ alert("Wrong password — still in view-only mode."); return; }
+  readOnly=false; unsavedChanges=false; applyReadOnly();
+  setDiskStatus("✏️ Editing shared board "+sheetState.id+" — edits are saved only when you click “Save online”","ok");
+  renderActive();
+}
+
+// on boot, reconnect to the last shared board in read-only mode (if no folder is connected)
+async function autoReconnectSheet(){
+  let s=null;
+  try{ s=JSON.parse(localStorage.getItem(SHEET_KEY)||"null"); }catch(e){}
+  if(!s||!s.id) return false;
+  sheetState={id:s.id, password:s.password||DEFAULT_PASSWORD};
+  readOnly=true;
+  try{
+    const blob=await readBin(s.id);
+    if(blob){
+      if(blob.password!=null) sheetState.password=blob.password;
+      if(blob.data) data=migrate(blob.data);
+    }
+  }catch(e){}
+  setDiskStatus("🔗 Viewing shared board "+s.id+" (read-only) — click “Edit mode” to edit","ok");
+  applyReadOnly();view={mode:"overview",eventId:null};renderActive();
+  return true;
+}
+
 function renderActive(){
   if(view.mode==="detail") renderDetail();
   else if(view.mode==="people") renderPeople();
   else renderOverview();
 }
 function save(){
+  if(readOnly) return; // viewing a shared sheet — never persist
   dirtySinceLoad=true;
   const json=JSON.stringify(cleanData());
   let lsOk=true;
@@ -465,6 +640,7 @@ function save(){
     setDiskStatus("⚠ Browser storage is full — click “Save backup” to keep your work","warn");
   }
   scheduleDiskSave(); // write to the connected project folder, if any
+  markUnsaved(); // shared online board uses MANUAL save — just flag it dirty
 }
 /* ---------- UNDO (last 3 destructive actions) ---------- */
 const UNDO_MAX=3;
@@ -911,7 +1087,11 @@ function renderPeople(){
 }
 
 /* ---------- controls ---------- */
-document.getElementById("overviewBtn").onclick=()=>{view={mode:"overview",eventId:null};renderOverview();};
+document.getElementById("overviewBtn").onclick=()=>{
+  // returning to the board list is a natural save point for a shared board
+  if(unsavedChanges && sheetState && !readOnly) saveOnline();
+  view={mode:"overview",eventId:null};renderOverview();
+};
 document.getElementById("peopleBtn").onclick=()=>{view={mode:"people",eventId:null};renderPeople();};
 document.getElementById("addEventBtn").onclick=()=>{
   const id="ev"+Date.now();
@@ -931,6 +1111,17 @@ document.getElementById("exportBtn").onclick=()=>{
   downloadText(backupPayload(),"grad-festival-backup-"+new Date().toISOString().slice(0,10)+".json");
 };
 document.getElementById("connectBtn").onclick=connectFolder;
+document.getElementById("connectSheetBtn").onclick=connectSheet;
+document.getElementById("editModeBtn").onclick=()=>enterEditMode();
+document.getElementById("saveOnlineBtn").onclick=saveOnline;
+// Remind the user to save a shared board before leaving with unsaved changes.
+window.addEventListener("beforeunload",e=>{
+  if(unsavedChanges && sheetState && !readOnly){
+    e.preventDefault();
+    e.returnValue="You have unsaved changes to the shared board. Click “Save online” before closing, or they'll be lost.";
+    return e.returnValue;
+  }
+});
 const importFile=document.getElementById("importFile");
 document.getElementById("importBtn").onclick=()=>importFile.click();
 importFile.onchange=()=>{
@@ -955,7 +1146,9 @@ document.getElementById("undoBtn").onclick=doUndo;
 
 renderOverview();
 updateUndoBtn();
-autoReconnect();
+applyReadOnly();
+// Prefer a remembered shared sheet (read-only); otherwise reconnect a project folder.
+autoReconnectSheet().then(connectedSheet=>{ if(!connectedSheet) autoReconnect(); });
 </script>
 </body>
 </html>

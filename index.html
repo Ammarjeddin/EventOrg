@@ -155,12 +155,15 @@ button:disabled:hover{border-color:var(--line);color:var(--ink)}
 .daytag{font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;white-space:nowrap}
 .empty{background:var(--card);border:1px dashed var(--line);border-radius:12px;padding:18px;color:var(--muted)}
 @media print{.bar,.add-task,.ghost,.exp{display:none}.stream,.person-card{break-inside:avoid}}
-/* read-only (viewing a shared sheet): hide editing affordances, block inline edits */
+/* read-only (viewing a shared sheet): hide editing affordances, block inline edits.
+   NOTE: the ▸ subtasks expander (.exp) stays visible — it's a view-only toggle so
+   viewers can still open a task to see its subtasks. */
 body.readonly .add-task,body.readonly .add-topic,body.readonly .topic-tools,
-body.readonly .exp,body.readonly #addEventBtn,body.readonly #undoBtn,
+body.readonly #addEventBtn,body.readonly #undoBtn,
 body.readonly #resetEvent,body.readonly #delEvent,body.readonly #importBtn,
 body.readonly .task .ghost,body.readonly .ctask-row .ghost,body.readonly .subtask .ghost{display:none}
 body.readonly .editfield,body.readonly .txt,body.readonly .who{pointer-events:none}
+body.readonly .who .assign{display:none} /* hide "+ assign" prompts; keep assigned names */
 body.readonly .editfield:hover,body.readonly .txt:hover,body.readonly .who:hover{border-color:transparent;background:transparent;box-shadow:none}
 body.readonly .task input[type=checkbox],body.readonly .ctask-row input[type=checkbox],
 body.readonly .subtask input[type=checkbox],body.readonly .prow input[type=checkbox]{pointer-events:none;opacity:.6}
